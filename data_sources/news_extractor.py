@@ -24,7 +24,7 @@ class NewsExtractor:
         if not self.api_key:
             logger.warning("No Tavily API key provided. Set the TAVILY_API_KEY environment variable.")
         
-        self.api_base = "https://api.tavily.com/v1"
+        self.api_base = "https://api.tavily.com/v1/search"
         
     def _make_request(self, endpoint: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -47,7 +47,7 @@ class NewsExtractor:
         
         try:
             response = requests.post(
-                f"{self.api_base}/{endpoint}",
+                f"{self.api_base}",
                 headers=headers,
                 json=params
             )
