@@ -309,7 +309,7 @@ class RAGSystem:
         try:
             # Check if this collection exists in ChromaDB
             existing_collections = self.chroma_client.list_collections()
-            collection_exists = any(collection.name == collection_name for collection in existing_collections)
+            collection_exists = collection_name in existing_collections
             
             if not collection_exists:
                 logger.warning(f"Collection for {book_id} not found in ChromaDB, processing book")
