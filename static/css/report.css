@@ -1,0 +1,344 @@
+/* Main Layout */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa;
+    color: #333;
+}
+
+.container-fluid {
+    padding: 0;
+}
+
+/* Sidebar */
+.sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 100;
+    padding: 0;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.sidebar-header {
+    padding: 1.5rem 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-header h3 {
+    margin: 0;
+    font-size: 1.4rem;
+}
+
+.sidebar .nav-link {
+    color: rgba(255, 255, 255, 0.75);
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sidebar .nav-link:hover {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar .nav-link.active {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.sidebar .feather {
+    width: 16px;
+    height: 16px;
+}
+
+/* Content Area */
+.content-area {
+    margin-left: 16.666667%;
+    padding: 2rem;
+}
+
+.content-section {
+    display: none;
+    padding-bottom: 2rem;
+}
+
+.content-section.active {
+    display: block;
+}
+
+.section-header {
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.section-header h2 {
+    margin: 0;
+    color: #212529;
+    font-weight: 600;
+}
+
+.section-header p {
+    margin: 0.5rem 0 0;
+    color: #6c757d;
+}
+
+/* Cards */
+.card {
+    margin-bottom: 1.5rem;
+    border: none;
+    border-radius: 0.5rem;
+}
+
+.card-title {
+    margin-bottom: 1.25rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+/* Placeholder charts */
+.placeholder-chart {
+    height: 250px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f1f3f5;
+    border-radius: 0.25rem;
+    color: #6c757d;
+    text-align: center;
+    padding: 1rem;
+}
+
+/* Loading indicator */
+#loading-indicator {
+    margin-top: 5rem;
+}
+
+/* Markdown Content */
+.markdown-content {
+    padding: 1rem;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    background-color: #fff;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.markdown-content h1 {
+    font-size: 1.75rem;
+}
+
+.markdown-content h2 {
+    font-size: 1.5rem;
+}
+
+.markdown-content h3 {
+    font-size: 1.25rem;
+}
+
+.markdown-content p {
+    margin-bottom: 1rem;
+}
+
+.markdown-content ul, 
+.markdown-content ol {
+    margin-bottom: 1rem;
+    padding-left: 1.5rem;
+}
+
+.markdown-content table {
+    width: 100%;
+    margin-bottom: 1rem;
+    border-collapse: collapse;
+}
+
+.markdown-content table th,
+.markdown-content table td {
+    padding: 0.5rem;
+    border: 1px solid #dee2e6;
+}
+
+.markdown-content table th {
+    background-color: #f8f9fa;
+}
+
+.markdown-content code {
+    padding: 0.2rem 0.4rem;
+    background-color: #f8f9fa;
+    border-radius: 0.25rem;
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 87.5%;
+    color: #e83e8c;
+}
+
+.markdown-content pre {
+    padding: 1rem;
+    margin-bottom: 1rem;
+    background-color: #f8f9fa;
+    border-radius: 0.25rem;
+    overflow-x: auto;
+}
+
+.markdown-content pre code {
+    padding: 0;
+    background-color: transparent;
+    border-radius: 0;
+    color: inherit;
+}
+
+/* Charts and Visualizations */
+.chart-container {
+    height: 300px;
+    position: relative;
+}
+
+.small-chart-container {
+    height: 200px;
+    position: relative;
+}
+
+/* Repository Info */
+.repo-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.repo-info .card-title {
+    margin-bottom: 1rem;
+}
+
+.repo-info-item {
+    display: flex;
+    margin-bottom: 0.5rem;
+}
+
+.repo-info-label {
+    font-weight: 600;
+    margin-right: 0.5rem;
+    min-width: 120px;
+}
+
+.repo-info-value {
+    color: #495057;
+}
+
+/* Directory structure */
+.directory-tree {
+    font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.9rem;
+}
+
+.directory-tree ul {
+    list-style-type: none;
+    padding-left: 1.5rem;
+}
+
+.directory-tree li {
+    padding: 0.25rem 0;
+}
+
+.directory-tree .file-icon,
+.directory-tree .folder-icon {
+    margin-right: 0.5rem;
+}
+
+.directory-tree .file-size {
+    color: #6c757d;
+    font-size: 0.8rem;
+    margin-left: 0.5rem;
+}
+
+/* Table styles */
+.table-container {
+    overflow-x: auto;
+}
+
+.analysis-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.analysis-table th,
+.analysis-table td {
+    padding: 0.75rem;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.analysis-table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    color: #495057;
+    text-align: left;
+}
+
+.analysis-table tr:hover {
+    background-color: #f1f3f5;
+}
+
+/* Badge styles */
+.technology-badge {
+    display: inline-block;
+    padding: 0.35em 0.65em;
+    font-size: 0.75em;
+    font-weight: 600;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 0.25rem;
+    margin-right: 0.5rem;
+    margin-bottom: 0.5rem;
+    background-color: #007bff;
+    color: #fff;
+}
+
+.technology-badge.frontend {
+    background-color: #20c997;
+}
+
+.technology-badge.backend {
+    background-color: #6610f2;
+}
+
+.technology-badge.database {
+    background-color: #fd7e14;
+}
+
+.technology-badge.language {
+    background-color: #6f42c1;
+}
+
+.technology-badge.tool {
+    background-color: #17a2b8;
+}
+
+/* Media Queries */
+@media (max-width: 768px) {
+    .sidebar {
+        position: static;
+        height: auto;
+        width: 100%;
+    }
+    
+    .content-area {
+        margin-left: 0;
+        padding: 1rem;
+    }
+    
+    .section-header {
+        margin-bottom: 1.5rem;
+    }
+    
+    .placeholder-chart {
+        height: 200px;
+    }
+}
