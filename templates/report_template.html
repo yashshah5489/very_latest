@@ -3,389 +3,244 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Financial Analyzer Codebase Analysis</title>
-    <link rel="stylesheet" href="/static/css/report.css">
-    <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/d3@7.3.0/dist/d3.min.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Indian Financial Analyzer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/report.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body>
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar -->
-            <div class="col-md-2 bg-dark sidebar">
-                <div class="sidebar-header">
-                    <h3 class="text-white">Financial Analyzer</h3>
-                    <p class="text-light">Code Analysis</p>
-                </div>
-                <ul class="nav flex-column">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="#overview" data-section="overview">
-                            <i data-feather="home"></i> Overview
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#code-structure" data-section="code-structure">
-                            <i data-feather="code"></i> Code Structure
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#architecture" data-section="architecture">
-                            <i data-feather="layers"></i> Architecture
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#financial-components" data-section="financial-components">
-                            <i data-feather="dollar-sign"></i> Financial Components
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#dependencies" data-section="dependencies">
-                            <i data-feather="git-merge"></i> Dependencies
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#enhancement-plan" data-section="enhancement-plan">
-                            <i data-feather="clipboard"></i> Enhancement Plan
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="#setup-guide" data-section="setup-guide">
-                            <i data-feather="settings"></i> Setup Guide
-                        </a>
-                    </li>
-                </ul>
-                <div class="mt-3 px-3">
-                    <button id="analyze-repo-btn" class="btn btn-primary btn-sm w-100">
-                        <i data-feather="refresh-cw"></i> Analyze Repository
-                    </button>
-                </div>
+    <div class="container">
+        <header>
+            <h1>Indian Financial Analyzer</h1>
+            <p class="subtitle">AI-powered financial insights for Indian markets</p>
+        </header>
+        
+        <nav class="main-nav">
+            <ul>
+                <li><a href="#dashboard" class="active">Dashboard</a></li>
+                <li><a href="#market-analysis">Market Analysis</a></li>
+                <li><a href="#stock-analysis">Stock Analysis</a></li>
+                <li><a href="#book-insights">Book Insights</a></li>
+                <li><a href="#portfolio">Portfolio</a></li>
+            </ul>
+        </nav>
+        
+        <div class="content">
+            {% if error %}
+            <div class="error-message">
+                <p>{{ error }}</p>
+                <p>Please check your configuration and try again.</p>
             </div>
-
-            <!-- Main Content -->
-            <div class="col-md-10 content-area">
-                <!-- Loading Indicator -->
-                <div id="loading-indicator" class="text-center p-5" style="display: none;">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
+            {% endif %}
+            
+            <section id="dashboard" class="active-section">
+                <h2>Market Dashboard</h2>
+                
+                <div class="dashboard-grid">
+                    <div class="grid-item market-overview">
+                        <h3>Market Overview</h3>
+                        <div class="market-indices">
+                            {% if market_data and market_data.indices %}
+                                {% for index in market_data.indices %}
+                                <div class="index-card {% if index.change > 0 %}positive{% elif index.change < 0 %}negative{% else %}neutral{% endif %}">
+                                    <h4>{{ index.name }}</h4>
+                                    <p class="index-value">{{ "%.2f"|format(index.value) }}</p>
+                                    <p class="index-change">
+                                        {% if index.change > 0 %}+{% endif %}{{ "%.2f"|format(index.change) }} 
+                                        ({% if index.change > 0 %}+{% endif %}{{ "%.2f"|format(index.change_percent) }}%)
+                                    </p>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <p>Loading market data...</p>
+                            {% endif %}
+                        </div>
                     </div>
-                    <p class="mt-2">Analyzing repository...</p>
+                    
+                    <div class="grid-item recent-news">
+                        <h3>Recent News</h3>
+                        <div class="news-container">
+                            {% if news_data and news_data.articles %}
+                                {% for article in news_data.articles %}
+                                <div class="news-item">
+                                    <h4>{{ article.title }}</h4>
+                                    <p class="news-source">{{ article.source }} | {{ article.published_date }}</p>
+                                    <p class="news-summary">{{ article.content|truncate(150) }}</p>
+                                    <a href="{{ article.url }}" target="_blank" class="news-link">Read more</a>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <p>Loading news...</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="grid-item sector-performance">
+                        <h3>Sector Performance</h3>
+                        <div class="sector-chart-container">
+                            <canvas id="sectorChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="grid-item quick-analysis">
+                        <h3>Market Analysis</h3>
+                        <div id="market-analysis-container">
+                            <p>Click the button below to generate a market analysis using AI.</p>
+                            <button id="generate-market-analysis" class="action-button">Generate Analysis</button>
+                            <div id="market-analysis-result" class="analysis-result"></div>
+                        </div>
+                    </div>
                 </div>
-
-                <!-- Overview Section -->
-                <section id="overview" class="content-section active">
-                    <div class="section-header">
-                        <h2>Project Overview</h2>
-                        <p>Financial Analyzer Codebase Analysis</p>
+            </section>
+            
+            <section id="market-analysis">
+                <h2>Market Analysis</h2>
+                <div class="market-analysis-container">
+                    <div class="analysis-options">
+                        <h3>Analysis Options</h3>
+                        <form id="market-analysis-form">
+                            <div class="form-group">
+                                <label for="analysis-timeframe">Timeframe:</label>
+                                <select id="analysis-timeframe" name="timeframe">
+                                    <option value="1d">1 Day</option>
+                                    <option value="1w">1 Week</option>
+                                    <option value="1m" selected>1 Month</option>
+                                    <option value="3m">3 Months</option>
+                                    <option value="6m">6 Months</option>
+                                    <option value="1y">1 Year</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="analysis-focus">Focus Area:</label>
+                                <select id="analysis-focus" name="focus">
+                                    <option value="general" selected>General Market</option>
+                                    <option value="technical">Technical Analysis</option>
+                                    <option value="fundamental">Fundamental Analysis</option>
+                                    <option value="news">News Sentiment</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="action-button">Generate Detailed Analysis</button>
+                        </form>
                     </div>
-
-                    <div class="repo-info card shadow-sm mb-4">
-                        <div class="card-body">
-                            <h5 class="card-title">Repository Information</h5>
-                            <div id="repo-info-content">
-                                <p>Enter repository URL or click 'Analyze Repository' to begin.</p>
+                    
+                    <div class="analysis-result-container">
+                        <h3>Market Analysis</h3>
+                        <div id="detailed-market-analysis" class="detailed-analysis">
+                            <p>Choose your analysis options and click 'Generate Detailed Analysis'.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="stock-analysis">
+                <h2>Stock Analysis</h2>
+                <div class="stock-analysis-container">
+                    <div class="stock-search">
+                        <h3>Find a Stock</h3>
+                        <div class="search-form">
+                            <input type="text" id="stock-search-input" placeholder="Enter stock symbol or company name">
+                            <button id="stock-search-button" class="action-button">Search</button>
+                        </div>
+                        <div id="stock-search-results" class="search-results"></div>
+                    </div>
+                    
+                    <div class="stock-details">
+                        <h3>Stock Details</h3>
+                        <div id="stock-details-container">
+                            <p>Search for a stock to view details.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stock-analysis-result">
+                        <h3>AI Analysis</h3>
+                        <div id="stock-analysis-container">
+                            <p>After selecting a stock, click the button below to generate an analysis.</p>
+                            <button id="generate-stock-analysis" class="action-button" disabled>Analyze Stock</button>
+                            <div id="stock-analysis-result" class="analysis-result"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="book-insights">
+                <h2>Financial Book Insights</h2>
+                <div class="book-insights-container">
+                    <div class="book-selection">
+                        <h3>Financial Books</h3>
+                        <div id="book-list" class="book-list">
+                            <p>Loading available books...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="book-insights-search">
+                        <h3>Get Insights from Books</h3>
+                        <div class="insights-form">
+                            <textarea id="insights-query" placeholder="Enter your financial question"></textarea>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="search-all-books" checked>
+                                    Search across all books
+                                </label>
+                            </div>
+                            <button id="get-insights-button" class="action-button">Get Book Insights</button>
+                        </div>
+                    </div>
+                    
+                    <div class="insights-result">
+                        <h3>Book Insights</h3>
+                        <div id="book-insights-result" class="insights-result-container">
+                            <p>Ask a question to get insights from financial books.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="portfolio">
+                <h2>Portfolio Analysis</h2>
+                <div class="portfolio-container">
+                    <div class="portfolio-management">
+                        <h3>Your Portfolio</h3>
+                        <div id="portfolio-stocks" class="portfolio-stocks">
+                            <p>You need to login to view your portfolio.</p>
+                            <button id="login-button" class="action-button">Login</button>
+                        </div>
+                        <div class="portfolio-add-stock" id="add-stock-form" style="display: none;">
+                            <h4>Add Stock to Portfolio</h4>
+                            <div class="form-inline">
+                                <input type="text" id="add-stock-symbol" placeholder="Stock Symbol">
+                                <input type="number" id="add-stock-quantity" placeholder="Quantity">
+                                <button id="add-stock-button" class="action-button small">Add</button>
                             </div>
                         </div>
                     </div>
-
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="card shadow-sm mb-4">
-                                <div class="card-body">
-                                    <h5 class="card-title">Technology Stack</h5>
-                                    <div id="tech-stack-chart-container">
-                                        <div class="placeholder-chart">
-                                            <p>Technology data will appear here after analysis</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                    
+                    <div class="portfolio-analysis">
+                        <h3>Portfolio Analysis</h3>
+                        <div id="portfolio-analysis-container" class="portfolio-analysis-container">
+                            <p>Login and add stocks to your portfolio to generate an analysis.</p>
                         </div>
-                        <div class="col-md-6">
-                            <div class="card shadow-sm mb-4">
-                                <div class="card-body">
-                                    <h5 class="card-title">Code Metrics</h5>
-                                    <div id="code-metrics-container">
-                                        <div class="placeholder-chart">
-                                            <p>Code metrics will appear here after analysis</p>
-                                        </div>
-                                    </div>
-                                </div>
+                    </div>
+                    
+                    <div class="portfolio-visualization">
+                        <h3>Portfolio Visualization</h3>
+                        <div class="portfolio-charts">
+                            <div class="chart-container">
+                                <canvas id="allocationChart"></canvas>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="performanceChart"></canvas>
                             </div>
                         </div>
                     </div>
-
-                    <div class="card shadow-sm mb-4">
-                        <div class="card-body">
-                            <h5 class="card-title">Financial Analysis Components</h5>
-                            <div id="financial-components-overview">
-                                <div class="placeholder-chart">
-                                    <p>Financial component data will appear here after analysis</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Code Structure Section -->
-                <section id="code-structure" class="content-section">
-                    <div class="section-header">
-                        <h2>Code Structure</h2>
-                        <p>Analysis of the codebase organization and structure</p>
-                    </div>
-
-                    <div class="card shadow-sm mb-4">
-                        <div class="card-body">
-                            <h5 class="card-title">Directory Structure</h5>
-                            <div id="directory-structure-container">
-                                <div class="placeholder-chart">
-                                    <p>Directory structure will appear here after analysis</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="card shadow-sm mb-4">
-                                <div class="card-body">
-                                    <h5 class="card-title">File Distribution</h5>
-                                    <div id="file-distribution-chart-container">
-                                        <div class="placeholder-chart">
-                                            <p>File distribution data will appear here after analysis</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card shadow-sm mb-4">
-                                <div class="card-body">
-                                    <h5 class="card-title">Module Breakdown</h5>
-                                    <div id="module-breakdown-container">
-                                        <div class="placeholder-chart">
-                                            <p>Module data will appear here after analysis</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card shadow-sm mb-4">
-                        <div class="card-body">
-                            <h5 class="card-title">Code Complexity Analysis</h5>
-                            <div id="code-complexity-container">
-                                <div class="placeholder-chart">
-                                    <p>Code complexity data will appear here after analysis</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Architecture Section -->
-                <section id="architecture" class="content-section">
-                    <div class="section-header">
-                        <h2>Architecture</h2>
-                        <p>System architecture and component relationships</p>
-                    </div>
-
-                    <div class="card shadow-sm mb-4">
-                        <div class="card-body">
-                            <h5 class="card-title">System Overview</h5>
-                            <div id="system-overview-container">
-                                <div class="placeholder-chart">
-                                    <p>System overview diagram will appear here after analysis</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card shadow-sm mb-4">
-                        <div class="card-body">
-                            <h5 class="card-title">Component Relationships</h5>
-                            <div id="component-diagram-container">
-                                <div class="placeholder-chart">
-                                    <p>Component diagram will appear here after analysis</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card shadow-sm mb-4">
-                        <div class="card-body">
-                            <h5 class="card-title">Layer Diagram</h5>
-                            <div id="layer-diagram-container">
-                                <div class="placeholder-chart">
-                                    <p>Layer diagram will appear here after analysis</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Financial Components Section -->
-                <section id="financial-components" class="content-section">
-                    <div class="section-header">
-                        <h2>Financial Components</h2>
-                        <p>Analysis of financial functionality</p>
-                    </div>
-
-                    <div class="card shadow-sm mb-4">
-                        <div class="card-body">
-                            <h5 class="card-title">Financial Feature Map</h5>
-                            <div id="financial-feature-map-container">
-                                <div class="placeholder-chart">
-                                    <p>Financial feature map will appear here after analysis</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card shadow-sm mb-4">
-                        <div class="card-body">
-                            <h5 class="card-title">Financial Data Flow</h5>
-                            <div id="financial-flow-diagram-container">
-                                <div class="placeholder-chart">
-                                    <p>Financial data flow diagram will appear here after analysis</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card shadow-sm mb-4">
-                        <div class="card-body">
-                            <h5 class="card-title">Financial Component Details</h5>
-                            <div id="financial-component-details">
-                                <div class="placeholder-chart">
-                                    <p>Financial component details will appear here after analysis</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Dependencies Section -->
-                <section id="dependencies" class="content-section">
-                    <div class="section-header">
-                        <h2>Dependencies</h2>
-                        <p>External and internal dependencies</p>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="card shadow-sm mb-4">
-                                <div class="card-body">
-                                    <h5 class="card-title">External Dependencies</h5>
-                                    <div id="external-dependencies-container">
-                                        <div class="placeholder-chart">
-                                            <p>External dependency data will appear here after analysis</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card shadow-sm mb-4">
-                                <div class="card-body">
-                                    <h5 class="card-title">Dependency Chart</h5>
-                                    <div id="dependency-chart-container">
-                                        <div class="placeholder-chart">
-                                            <p>Dependency chart will appear here after analysis</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card shadow-sm mb-4">
-                        <div class="card-body">
-                            <h5 class="card-title">Module Dependencies</h5>
-                            <div id="module-dependencies-container">
-                                <div class="placeholder-chart">
-                                    <p>Module dependency data will appear here after analysis</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Enhancement Plan Section -->
-                <section id="enhancement-plan" class="content-section">
-                    <div class="section-header">
-                        <h2>Enhancement Plan</h2>
-                        <p>Recommendations for improvements and enhancements</p>
-                    </div>
-
-                    <div class="card shadow-sm mb-4">
-                        <div class="card-body">
-                            <h5 class="card-title">Enhancement Opportunities</h5>
-                            <div id="enhancement-opportunities-container">
-                                <button id="generate-enhancement-report-btn" class="btn btn-primary mb-3">
-                                    <i data-feather="file-text"></i> Generate Enhancement Report
-                                </button>
-                                <div id="enhancement-report-content" class="markdown-content">
-                                    <p>Click the button above to generate an enhancement report after analysis.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Setup Guide Section -->
-                <section id="setup-guide" class="content-section">
-                    <div class="section-header">
-                        <h2>Setup Guide</h2>
-                        <p>Development environment setup instructions</p>
-                    </div>
-
-                    <div class="card shadow-sm mb-4">
-                        <div class="card-body">
-                            <h5 class="card-title">Development Environment Setup</h5>
-                            <div id="setup-guide-container">
-                                <button id="generate-setup-guide-btn" class="btn btn-primary mb-3">
-                                    <i data-feather="file-text"></i> Generate Setup Guide
-                                </button>
-                                <div id="setup-guide-content" class="markdown-content">
-                                    <p>Click the button above to generate a setup guide after analysis.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-            </div>
+                </div>
+            </section>
         </div>
+        
+        <footer>
+            <p>&copy; 2025 Indian Financial Analyzer - Powered by Tavily and Groq AI</p>
+        </footer>
     </div>
-
-    <!-- Repository Analysis Modal -->
-    <div class="modal fade" id="repo-analysis-modal" tabindex="-1" aria-labelledby="repo-analysis-modal-label" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="repo-analysis-modal-label">Analyze Repository</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="repo-analysis-form">
-                        <div class="mb-3">
-                            <label for="repo-url" class="form-label">Repository URL</label>
-                            <input type="text" class="form-control" id="repo-url" value="https://github.com/yashshah5489/updated_college_proj" required>
-                            <div class="form-text">Enter the GitHub repository URL to analyze</div>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" id="start-analysis-btn">Start Analysis</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="/static/js/report.js"></script>
+    
+    <script src="{{ url_for('static', filename='js/report.js') }}"></script>
 </body>
 </html>

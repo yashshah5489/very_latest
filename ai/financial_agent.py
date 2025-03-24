@@ -1,455 +1,444 @@
 """
-Financial Agent Module for Indian Financial Analyzer
+Financial Agent for Indian Financial Analyzer
 """
-import logging
-from datetime import datetime
+import os
 import json
-from ai.groq_client import groq_client
+import logging
+from typing import Dict, Any, List, Optional, Union
+from datetime import datetime
+
+from ai.groq_client import GroqClient
 from ai.rag_system import rag_system
-from data_sources.news_extractor import news_extractor
 from data_sources.stock_data import stock_data
-import config
+from data_sources.news_extractor import news_extractor
 
 logger = logging.getLogger(__name__)
 
 class FinancialAgent:
     """
-    Agent for financial analysis tasks using LLM capabilities
+    AI-powered financial agent specialized for Indian markets
     """
     
-    def __init__(self, user_id=None):
+    def __init__(self, groq_client=None):
         """
-        Initialize the financial agent
+        Initialize the financial agent.
         
         Args:
-            user_id (str): ID of the user this agent is serving
+            groq_client: Optional pre-configured Groq client
         """
-        self.user_id = user_id
-        self.context = {
-            "market": config.DEFAULT_INDEX,
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    def market_summary(self):
+        self.groq_client = groq_client or GroqClient()
+        
+    def market_summary(self) -> Dict[str, Any]:
         """
-        Generate a market summary for Indian markets
+        Generate a summary of current market conditions.
         
         Returns:
-            dict: Market summary and insights
+            Dictionary with market summary information
         """
-        # Get market data
-        market_data = stock_data.get_market_overview()
-        sectors_data = stock_data.get_sector_performance()
-        
-        # Format data for the LLM
-        market_context = "Current Indian Market Indices:\n"
-        for index in market_data.get("indices", []):
-            change_sign = "+" if index.get("change", 0) >= 0 else ""
-            market_context += f"- {index.get('name', '')}: {index.get('value', 0):.2f} ({change_sign}{index.get('change_percent', 0):.2f}%)\n"
-        
-        market_context += "\nSector Performance (30 days):\n"
-        for sector in sectors_data.get("sectors", []):
-            change_sign = "+" if sector.get("monthly_change", 0) >= 0 else ""
-            market_context += f"- {sector.get('name', '')}: {change_sign}{sector.get('monthly_change_percent', 0):.2f}%\n"
-        
-        # Get recent news headlines
-        news_data = news_extractor.get_market_news(market="Indian", limit=5)
-        
-        news_context = "Recent Market News:\n"
-        for article in news_data.get("articles", []):
-            news_context += f"- {article.get('title', '')}\n"
-        
-        # Combine data for LLM context
-        prompt = f"""You are a financial analyst specializing in the Indian market. Provide a comprehensive market summary based on the following data.
-
-{market_context}
-
-{news_context}
-
-In your summary:
-1. Analyze the current market trends and sector performances
-2. Highlight potential factors influencing market movements
-3. Indicate which sectors show strength or weakness
-4. Provide a short-term outlook (1-2 weeks) based on technical indicators and news sentiment
-5. Mention any upcoming events that might impact the Indian market
-
-Keep your analysis focused on the Indian financial market context and relevant to Indian investors.
-"""
-        
-        response = groq_client.generate_response(prompt, temperature=0.2)
-        
-        return {
-            "summary": response.get("text", "Failed to generate market summary"),
-            "market_data": market_data,
-            "sector_data": sectors_data,
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    def stock_analysis(self, symbol, company_name=None):
-        """
-        Generate analysis for a specific Indian stock
-        
-        Args:
-            symbol (str): Stock symbol
-            company_name (str): Company name (optional)
-            
-        Returns:
-            dict: Stock analysis and insights
-        """
-        # Get stock data
-        price_data = stock_data.get_stock_price(symbol, days=90)
-        company_info = stock_data.get_company_info(symbol)
-        
-        # Get stock news
-        news_data = news_extractor.get_stock_news(
-            symbol=symbol, 
-            company_name=company_name or company_info.get("name", ""),
-            limit=5
-        )
-        
-        # Format data for the LLM
-        company_context = f"""Company: {company_info.get('name', symbol)} ({symbol})
-Exchange: {company_info.get('exchange', 'NSE/BSE')}
-Sector: {company_info.get('sector', '')}
-Industry: {company_info.get('industry', '')}
-Current Price: ₹{company_info.get('current_price', 0):.2f}
-Market Cap: ₹{company_info.get('market_cap', 0)/10000000:.2f} Cr
-P/E Ratio: {company_info.get('pe_ratio', 0):.2f}
-Dividend Yield: {company_info.get('dividend_yield', 0)*100:.2f}%
-
-Company Description:
-{company_info.get('summary', 'No description available')}
-"""
-        
-        # Format price data
-        if price_data.get("data"):
-            first_price = price_data["data"][0]["close"]
-            last_price = price_data["data"][-1]["close"]
-            percent_change = ((last_price - first_price) / first_price) * 100
-            change_sign = "+" if percent_change >= 0 else ""
-            
-            price_context = f"""3-Month Performance: {change_sign}{percent_change:.2f}%
-Price Range: ₹{min(p['low'] for p in price_data['data'] if p['low']):.2f} - ₹{max(p['high'] for p in price_data['data'] if p['high']):.2f}
-Average Volume: {sum(p['volume'] for p in price_data['data'])/len(price_data['data']):.0f} shares
-"""
-        else:
-            price_context = "Price data not available."
-        
-        # Format news context
-        news_context = "Recent News:\n"
-        for article in news_data.get("articles", []):
-            news_context += f"- {article.get('title', '')}\n"
-        
-        # Combine data for LLM context
-        prompt = f"""You are a financial analyst specializing in Indian stocks. Provide a comprehensive analysis of this stock based on the following data.
-
-{company_context}
-
-{price_context}
-
-{news_context}
-
-In your analysis:
-1. Evaluate the stock's recent performance and volatility
-2. Analyze strengths, weaknesses, opportunities, and threats
-3. Compare key metrics to industry standards in India
-4. Identify potential catalysts or risks specific to this company or sector
-5. Provide a balanced investment perspective (short-term and long-term outlook)
-
-Include specific references to Indian market conditions and regulations where relevant.
-"""
-        
-        response = groq_client.generate_response(prompt, temperature=0.3)
-        
-        return {
-            "symbol": symbol,
-            "company_name": company_info.get("name", symbol),
-            "analysis": response.get("text", "Failed to generate stock analysis"),
-            "price_data": price_data,
-            "company_info": company_info,
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    def investment_advice(self, profile):
-        """
-        Generate personalized investment advice for Indian investors
-        
-        Args:
-            profile (dict): User investment profile
-            
-        Returns:
-            dict: Personalized investment advice
-        """
-        # Get market data for context
-        market_data = stock_data.get_market_overview()
-        sectors_data = stock_data.get_sector_performance()
-        
-        # Format market context
-        market_context = "Current Indian Market Conditions:\n"
-        for index in market_data.get("indices", []):
-            change_sign = "+" if index.get("change", 0) >= 0 else ""
-            market_context += f"- {index.get('name', '')}: {index.get('value', 0):.2f} ({change_sign}{index.get('change_percent', 0):.2f}%)\n"
-        
-        market_context += "\nSector Performance (30 days):\n"
-        for sector in sectors_data.get("sectors", []):
-            change_sign = "+" if sector.get("monthly_change", 0) >= 0 else ""
-            market_context += f"- {sector.get('name', '')}: {change_sign}{sector.get('monthly_change_percent', 0):.2f}%\n"
-        
-        # Get financial wisdom from books
-        book_insights = rag_system.generate_book_insight(
-            f"investment advice for {profile.get('risk_tolerance', 'moderate')} investor with {profile.get('time_horizon', 'long-term')} horizon in India"
-        )
-        
-        # Format profile for LLM
-        profile_str = "\n".join([f"{key.replace('_', ' ').title()}: {value}" for key, value in profile.items()])
-        
-        # Build prompt for the LLM
-        prompt = f"""You are a certified financial advisor specializing in Indian markets. Provide personalized investment advice based on the following information.
-
-Investor Profile:
-{profile_str}
-
-{market_context}
-
-Financial Book Insights:
-{book_insights.get('insight', '')}
-
-Based on this information, provide comprehensive investment advice including:
-1. Recommended asset allocation suitable for this investor profile
-2. Specific investment suggestions in the Indian market (specific mutual fund categories, ETFs, or sectors)
-3. Risk management strategies tailored to the investor's profile
-4. Tax-efficient investment approaches considering Indian tax laws
-5. Specific references to Indian financial instruments (PPF, ELSS, NPS, etc.) where appropriate
-6. A suggested investment plan with timeline and milestones
-
-Ensure all advice is specific to Indian markets, considers Indian regulations, and is tailored to the investor's profile.
-"""
-        
-        response = groq_client.generate_response(prompt, temperature=0.4, max_tokens=1500)
-        
-        return {
-            "profile": profile,
-            "advice": response.get("text", "Failed to generate investment advice"),
-            "book_insights": book_insights.get("sources", []),
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    def answer_financial_question(self, question):
-        """
-        Answer a financial question with insights from books and market knowledge
-        
-        Args:
-            question (str): Financial question
-            
-        Returns:
-            dict: Answer with sources
-        """
-        # Get book insights for the question
-        book_insights = rag_system.generate_book_insight(question)
-        
-        # Get current market context
-        market_data = stock_data.get_market_overview()
-        market_context = "Current Indian Market Indices:\n"
-        for index in market_data.get("indices", []):
-            change_sign = "+" if index.get("change", 0) >= 0 else ""
-            market_context += f"- {index.get('name', '')}: {index.get('value', 0):.2f} ({change_sign}{index.get('change_percent', 0):.2f}%)\n"
-        
-        # Build prompt for the LLM
-        prompt = f"""You are a financial advisor specializing in Indian markets. Answer the following question with insights from financial books and current market knowledge.
-
-Question: {question}
-
-Financial Book Insights:
-{book_insights.get('insight', '')}
-
-{market_context}
-
-Provide a comprehensive answer that:
-1. Directly addresses the question
-2. Incorporates financial wisdom from the books
-3. Applies the concepts to the current Indian financial context
-4. Is clear and accessible to investors at all levels
-5. Provides actionable information where appropriate
-
-Make specific references to Indian financial instruments, regulations, or market conditions where relevant.
-"""
-        
-        response = groq_client.generate_response(prompt, temperature=0.3)
-        
-        return {
-            "question": question,
-            "answer": response.get("text", "Failed to generate answer"),
-            "book_sources": book_insights.get("sources", []),
-            "timestamp": datetime.now().isoformat()
-        }
-    
-    def generate_financial_report(self, report_type, parameters=None):
-        """
-        Generate a financial report based on the specified type and parameters
-        
-        Args:
-            report_type (str): Type of report to generate
-            parameters (dict): Parameters for the report
-            
-        Returns:
-            dict: Generated report content
-        """
-        parameters = parameters or {}
-        report_content = ""
-        
-        if report_type == "market_outlook":
-            # Generate market outlook report
+        try:
+            # Get market data
             market_data = stock_data.get_market_overview()
-            sectors_data = stock_data.get_sector_performance()
-            news_data = news_extractor.get_market_news(market="Indian", limit=8)
+            sector_data = stock_data.get_sector_performance()
             
-            # Build context for LLM
-            market_context = self._format_market_data(market_data, sectors_data)
-            news_context = self._format_news_data(news_data)
+            # Get recent market news
+            news_data = news_extractor.get_market_news(market="Indian", limit=5)
             
-            # Build prompt for the LLM
-            prompt = f"""You are a senior financial analyst specializing in Indian markets. Generate a comprehensive market outlook report using the following data.
-
-{market_context}
-
-{news_context}
-
-Create a well-structured market outlook report with the following sections:
-1. Executive Summary - A concise overview of current market conditions
-2. Macroeconomic Factors - Analysis of key economic indicators affecting the Indian market
-3. Equity Market Analysis - Detailed analysis of major indices and sector performance
-4. Sector Outlook - Prospects for key sectors in the Indian economy
-5. Investment Recommendations - Suggested investment strategies based on the outlook
-6. Risk Factors - Potential risks that could impact the Indian market
-
-Format the report with clear section headings and well-organized content. Include specific data points from the provided information to support your analysis.
-"""
+            # Format context for LLM
+            context = "Current Indian Market Data:\n"
             
-            response = groq_client.generate_response(prompt, temperature=0.3, max_tokens=2000)
-            report_content = response.get("text", "Failed to generate market outlook report")
+            if market_data.get("indices"):
+                context += "Market Indices:\n"
+                for index in market_data["indices"]:
+                    change_sign = "+" if index.get("change", 0) >= 0 else ""
+                    context += f"- {index.get('name')}: {index.get('value', 0):.2f} ({change_sign}{index.get('change_percent', 0):.2f}%)\n"
             
-        elif report_type == "portfolio_analysis":
-            # Generate portfolio analysis report
-            portfolio = parameters.get("portfolio", [])
+            if sector_data.get("sectors"):
+                context += "\nSector Performance:\n"
+                for sector in sector_data["sectors"]:
+                    change_sign = "+" if sector.get("change", 0) >= 0 else ""
+                    context += f"- {sector.get('name')}: {change_sign}{sector.get('change_percent', 0):.2f}%\n"
             
-            if not portfolio:
-                return {"error": "Portfolio data is required for portfolio analysis report"}
+            if news_data.get("articles"):
+                context += "\nRecent Market News Headlines:\n"
+                for i, article in enumerate(news_data["articles"], 1):
+                    if i > 5:  # Limit to 5 news items
+                        break
+                    context += f"- {article.get('title')} ({article.get('source')})\n"
             
-            # Get data for each holding
-            holdings_data = []
-            total_value = 0
+            # Generate analysis
+            prompt = (
+                "You are a financial advisor specializing in Indian markets. "
+                "Provide a concise, insightful summary of current market conditions "
+                "based on the following data. Focus on main trends, notable movements, "
+                "and possible factors affecting the market. Tailor your response for "
+                "Indian investors, referencing relevant economic context.\n\n"
+                f"{context}\n\n"
+                "Format your response with the following sections:\n"
+                "1. Market Overview (overall sentiment and major index movements)\n"
+                "2. Sector Insights (which sectors are performing well/poorly and why)\n"
+                "3. Short-term Outlook (what investors might expect in the coming days/weeks)\n"
+            )
             
-            for holding in portfolio:
-                symbol = holding.get("symbol")
-                quantity = holding.get("quantity", 0)
+            response = self.groq_client.analyze_finance(prompt)
+            
+            # Parse the response to extract key insights
+            # For simplicity, we'll just use the full response
+            summary = response
+            
+            return {
+                "timestamp": datetime.now().isoformat(),
+                "summary": summary,
+                "market_data": market_data,
+                "sector_data": sector_data
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating market summary: {str(e)}")
+            return {
+                "timestamp": datetime.now().isoformat(),
+                "summary": "Unable to generate market summary due to an error. Please try again later.",
+                "error": str(e)
+            }
+    
+    def stock_analysis(self, symbol: str, company_name: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Generate an analysis for a specific stock.
+        
+        Args:
+            symbol: Stock symbol
+            company_name: Optional company name
+            
+        Returns:
+            Dictionary with stock analysis
+        """
+        try:
+            # Get stock data
+            price_data = stock_data.get_stock_price(symbol)
+            company_info = stock_data.get_company_info(symbol)
+            
+            # Get recent news about the stock
+            news_data = news_extractor.get_stock_news(symbol=symbol, limit=3)
+            
+            # Format context for LLM
+            context = f"Analysis for {company_name or symbol} ({symbol}):\n\n"
+            
+            if company_info:
+                context += "Company Information:\n"
+                context += f"- Name: {company_info.get('name', 'N/A')}\n"
+                context += f"- Sector: {company_info.get('sector', 'N/A')}\n"
+                context += f"- Industry: {company_info.get('industry', 'N/A')}\n"
+                context += f"- Current Price: ₹{company_info.get('current_price', 0):.2f}\n"
                 
-                if not symbol or not quantity:
-                    continue
-                    
-                price_data = stock_data.get_stock_price(symbol, days=30)
-                company_info = stock_data.get_company_info(symbol)
+                if company_info.get('market_cap'):
+                    context += f"- Market Cap: ₹{company_info.get('market_cap') / 10000000:.2f} Cr\n"
                 
-                if price_data.get("data"):
-                    current_price = price_data["data"][-1]["close"]
-                    value = current_price * quantity
-                    total_value += value
-                    
-                    holdings_data.append({
-                        "symbol": symbol,
-                        "name": company_info.get("name", symbol),
-                        "quantity": quantity,
-                        "current_price": current_price,
-                        "value": value,
-                        "sector": company_info.get("sector", "Unknown")
-                    })
+                if company_info.get('pe_ratio'):
+                    context += f"- P/E Ratio: {company_info.get('pe_ratio'):.2f}\n"
+                
+                if company_info.get('eps'):
+                    context += f"- EPS: ₹{company_info.get('eps'):.2f}\n"
+                
+                if company_info.get('dividend_yield'):
+                    context += f"- Dividend Yield: {company_info.get('dividend_yield') * 100:.2f}%\n"
+                
+                if company_info.get('52w_high'):
+                    context += f"- 52 Week High: ₹{company_info.get('52w_high'):.2f}\n"
+                
+                if company_info.get('52w_low'):
+                    context += f"- 52 Week Low: ₹{company_info.get('52w_low'):.2f}\n"
             
-            # Calculate allocations
-            for holding in holdings_data:
-                holding["allocation"] = (holding["value"] / total_value) * 100 if total_value > 0 else 0
+            if price_data:
+                context += "\nRecent Price Performance:\n"
+                
+                if 'change' in price_data and 'change_percent' in price_data:
+                    change_sign = "+" if price_data.get('change', 0) >= 0 else ""
+                    context += f"- Today's Change: {change_sign}{price_data.get('change', 0):.2f} ({change_sign}{price_data.get('change_percent', 0):.2f}%)\n"
+                
+                if 'volume' in price_data:
+                    context += f"- Volume: {price_data.get('volume', 0):,}\n"
+                
+                if 'avg_volume' in price_data:
+                    context += f"- Average Volume: {price_data.get('avg_volume', 0):,}\n"
+                
+                if 'performance' in price_data:
+                    perf = price_data['performance']
+                    if '1m' in perf:
+                        context += f"- 1 Month: {perf['1m']:.2f}%\n"
+                    if '3m' in perf:
+                        context += f"- 3 Month: {perf['3m']:.2f}%\n"
+                    if '6m' in perf:
+                        context += f"- 6 Month: {perf['6m']:.2f}%\n"
+                    if '1y' in perf:
+                        context += f"- 1 Year: {perf['1y']:.2f}%\n"
             
-            # Format portfolio data for LLM
-            portfolio_context = f"Portfolio Value: ₹{total_value:.2f}\n\nHoldings:\n"
+            if news_data.get("articles"):
+                context += "\nRecent News:\n"
+                for article in news_data["articles"]:
+                    context += f"- {article.get('title')} ({article.get('published_date')})\n"
+                    if article.get('content'):
+                        # Include a snippet of the content
+                        snippet = article['content'][:200] + "..." if len(article['content']) > 200 else article['content']
+                        context += f"  Summary: {snippet}\n"
             
-            for holding in holdings_data:
-                portfolio_context += f"- {holding['name']} ({holding['symbol']}): {holding['quantity']} shares, ₹{holding['value']:.2f} ({holding['allocation']:.2f}%), Sector: {holding['sector']}\n"
+            # Generate analysis
+            prompt = (
+                "You are a financial analyst specializing in Indian stock markets. "
+                "Provide a detailed analysis of the following stock based on the provided data. "
+                "Focus on current valuation, recent performance, news impact, and outlook. "
+                "Tailor your analysis for Indian investors, considering relevant market context.\n\n"
+                f"{context}\n\n"
+                "Format your analysis with the following sections:\n"
+                "1. Company Overview (brief description of business and market position)\n"
+                "2. Financial Assessment (valuation metrics, financial health)\n"
+                "3. Recent Performance (price action, news impact)\n"
+                "4. Outlook & Recommendation (potential future performance, risk factors, investment thesis)\n"
+            )
             
-            # Group by sector for sector allocation
-            sectors = {}
-            for holding in holdings_data:
-                sector = holding["sector"]
-                if sector not in sectors:
-                    sectors[sector] = 0
-                sectors[sector] += holding["value"]
+            analysis = self.groq_client.analyze_finance(prompt)
             
-            portfolio_context += "\nSector Allocation:\n"
-            for sector, value in sectors.items():
-                allocation = (value / total_value) * 100 if total_value > 0 else 0
-                portfolio_context += f"- {sector}: ₹{value:.2f} ({allocation:.2f}%)\n"
+            return {
+                "symbol": symbol,
+                "company_name": company_info.get('name', company_name or symbol),
+                "analysis": analysis,
+                "timestamp": datetime.now().isoformat()
+            }
             
-            # Get market data for context
+        except Exception as e:
+            logger.error(f"Error generating stock analysis for {symbol}: {str(e)}")
+            return {
+                "symbol": symbol,
+                "company_name": company_name or symbol,
+                "analysis": f"Unable to generate analysis for {symbol} due to an error. Please try again later.",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+    
+    def generate_investment_advice(self, profile: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generate personalized investment advice based on a user profile.
+        
+        Args:
+            profile: Dictionary containing user investment profile information
+            
+        Returns:
+            Dictionary with personalized investment advice
+        """
+        try:
+            # Extract profile information
+            risk_tolerance = profile.get('risk_tolerance', 'moderate')
+            investment_horizon = profile.get('investment_horizon', 'medium')
+            goals = profile.get('goals', [])
+            current_investments = profile.get('current_investments', [])
+            
+            # Get current market data
             market_data = stock_data.get_market_overview()
-            market_context = "Current Market Conditions:\n"
-            for index in market_data.get("indices", []):
-                change_sign = "+" if index.get("change", 0) >= 0 else ""
-                market_context += f"- {index.get('name', '')}: {index.get('value', 0):.2f} ({change_sign}{index.get('change_percent', 0):.2f}%)\n"
             
-            # Build prompt for the LLM
-            prompt = f"""You are a portfolio manager specializing in Indian markets. Analyze this investment portfolio and provide recommendations.
-
-{portfolio_context}
-
-{market_context}
-
-Generate a comprehensive portfolio analysis report with the following sections:
-1. Portfolio Summary - Overview of current holdings and allocation
-2. Performance Analysis - Assessment of portfolio performance
-3. Risk Assessment - Analysis of portfolio risk factors
-4. Diversification Analysis - Evaluation of portfolio diversification
-5. Sector Exposure - Analysis of sector allocation and risks
-6. Recommendations - Specific suggestions for portfolio optimization
-   - Holdings to maintain
-   - Holdings to increase
-   - Holdings to reduce
-   - New positions to consider
-7. Tax Considerations - Indian tax implications for recommended changes
-
-Format the report with clear section headings and well-organized content. Include specific data points from the provided information to support your analysis.
-Ensure all recommendations are suitable for the Indian market and consider Indian tax regulations.
-"""
+            # Format context for LLM
+            context = "User Investment Profile:\n"
+            context += f"- Risk Tolerance: {risk_tolerance}\n"
+            context += f"- Investment Horizon: {investment_horizon}\n"
             
-            response = groq_client.generate_response(prompt, temperature=0.3, max_tokens=2000)
-            report_content = response.get("text", "Failed to generate portfolio analysis report")
-        
-        return {
-            "report_type": report_type,
-            "content": report_content,
-            "parameters": parameters,
-            "timestamp": datetime.now().isoformat()
-        }
+            if goals:
+                context += "- Investment Goals:\n"
+                for goal in goals:
+                    context += f"  * {goal.get('description')}: ₹{goal.get('target_amount', 0):,} in {goal.get('timeframe', 'N/A')}\n"
+            
+            if current_investments:
+                context += "- Current Investments:\n"
+                for investment in current_investments:
+                    context += f"  * {investment.get('type')}: {investment.get('allocation', 0)}% (₹{investment.get('amount', 0):,})\n"
+            
+            if market_data.get("indices"):
+                context += "\nCurrent Market Indices:\n"
+                for index in market_data["indices"]:
+                    change_sign = "+" if index.get("change", 0) >= 0 else ""
+                    context += f"- {index.get('name')}: {index.get('value', 0):.2f} ({change_sign}{index.get('change_percent', 0):.2f}%)\n"
+            
+            # Generate advice
+            prompt = (
+                "You are a financial advisor specializing in Indian markets. "
+                "Provide personalized investment advice based on the following user profile "
+                "and current market conditions. Tailor your recommendations specifically "
+                "for Indian investors, considering available investment options in India, "
+                "tax implications, and current market environment.\n\n"
+                f"{context}\n\n"
+                "Format your advice with the following sections:\n"
+                "1. Portfolio Assessment (evaluation of current allocation if available)\n"
+                "2. Recommended Asset Allocation (specific percentages across asset classes)\n"
+                "3. Investment Suggestions (specific types of funds/instruments suitable for the investor)\n"
+                "4. Action Plan (concrete next steps the investor should take)\n"
+            )
+            
+            advice = self.groq_client.analyze_finance(prompt)
+            
+            return {
+                "advice": advice,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating investment advice: {str(e)}")
+            return {
+                "advice": "Unable to generate personalized investment advice due to an error. Please try again later.",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
     
-    def _format_market_data(self, market_data, sectors_data):
-        """Format market data for LLM consumption"""
-        context = "Current Indian Market Indices:\n"
-        for index in market_data.get("indices", []):
-            change_sign = "+" if index.get("change", 0) >= 0 else ""
-            context += f"- {index.get('name', '')}: {index.get('value', 0):.2f} ({change_sign}{index.get('change_percent', 0):.2f}%)\n"
+    def answer_financial_question(self, question: str) -> Dict[str, Any]:
+        """
+        Answer a financial question using AI and financial book knowledge.
         
-        context += "\nSector Performance (30 days):\n"
-        for sector in sectors_data.get("sectors", []):
-            change_sign = "+" if sector.get("monthly_change", 0) >= 0 else ""
-            context += f"- {sector.get('name', '')}: {change_sign}{sector.get('monthly_change_percent', 0):.2f}%\n"
+        Args:
+            question: The financial question to answer
             
-        return context
+        Returns:
+            Dictionary with answer information
+        """
+        try:
+            # First, get insights from financial books
+            book_insights = rag_system.answer_financial_question(question)
+            
+            # Then, augment with current market context
+            market_data = stock_data.get_market_overview()
+            
+            market_context = "Current Indian Market Context:\n"
+            if market_data.get("indices"):
+                for index in market_data["indices"]:
+                    change_sign = "+" if index.get("change", 0) >= 0 else ""
+                    market_context += f"- {index.get('name')}: {index.get('value', 0):.2f} ({change_sign}{index.get('change_percent', 0):.2f}%)\n"
+            
+            # Generate a comprehensive answer
+            prompt = (
+                "You are a financial advisor specializing in Indian markets. "
+                f"The user asks: \"{question}\"\n\n"
+                "Provide a comprehensive answer combining financial wisdom from books "
+                "and current market context. Focus on relevance to Indian investors.\n\n"
+                f"Insights from financial books:\n{book_insights.get('answer')}\n\n"
+                f"{market_context}\n\n"
+                "Provide a clear, actionable answer that integrates the book knowledge "
+                "with current market context. Be specific to Indian markets where relevant."
+            )
+            
+            answer = self.groq_client.analyze_finance(prompt)
+            
+            return {
+                "question": question,
+                "answer": answer,
+                "book_sources": book_insights.get("sources", []),
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error answering financial question: {str(e)}")
+            return {
+                "question": question,
+                "answer": f"Unable to answer this question due to an error. Please try again later.",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
     
-    def _format_news_data(self, news_data):
-        """Format news data for LLM consumption"""
-        context = "Recent Market News:\n"
-        for article in news_data.get("articles", []):
-            context += f"- {article.get('title', '')}\n"
-            if article.get('content'):
-                context += f"  Summary: {article.get('content', '')[:200]}...\n"
+    def generate_financial_report(self, report_type: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generate a financial report of a specific type.
+        
+        Args:
+            report_type: Type of report to generate
+            data: Data to use for generating the report
+            
+        Returns:
+            Dictionary with generated report
+        """
+        try:
+            report_content = ""
+            
+            if report_type == "portfolio_analysis":
+                portfolio = data.get("portfolio", [])
                 
-        return context
+                context = "Portfolio Holdings:\n"
+                for holding in portfolio:
+                    context += f"- {holding.get('symbol')}: {holding.get('shares')} shares at ₹{holding.get('purchase_price', 0):.2f}\n"
+                
+                prompt = (
+                    "You are a portfolio analyst specializing in Indian markets. "
+                    "Analyze the following investment portfolio and provide insights "
+                    "on diversification, risk exposure, potential areas of improvement, "
+                    "and overall assessment. Tailor your analysis for Indian investors.\n\n"
+                    f"{context}\n\n"
+                    "Format your analysis with the following sections:\n"
+                    "1. Portfolio Overview (composition, total value, key characteristics)\n"
+                    "2. Risk Assessment (concentration risks, sector exposure)\n"
+                    "3. Performance Analysis (estimated returns, benchmark comparison)\n"
+                    "4. Recommendations (suggestions for optimization)\n"
+                )
+                
+                report_content = self.groq_client.analyze_finance(prompt)
+            
+            elif report_type == "market_outlook":
+                timeframe = data.get("timeframe", "short_term")
+                sectors = data.get("sectors", [])
+                
+                # Get market data
+                market_data = stock_data.get_market_overview()
+                sector_data = stock_data.get_sector_performance()
+                
+                # Format context
+                context = "Current Indian Market Data:\n"
+                if market_data.get("indices"):
+                    for index in market_data["indices"]:
+                        change_sign = "+" if index.get("change", 0) >= 0 else ""
+                        context += f"- {index.get('name')}: {index.get('value', 0):.2f} ({change_sign}{index.get('change_percent', 0):.2f}%)\n"
+                
+                if sectors and sector_data.get("sectors"):
+                    context += "\nSelected Sectors Performance:\n"
+                    for sector_name in sectors:
+                        sector = next((s for s in sector_data["sectors"] if s.get("name") == sector_name), None)
+                        if sector:
+                            change_sign = "+" if sector.get("change", 0) >= 0 else ""
+                            context += f"- {sector.get('name')}: {change_sign}{sector.get('change_percent', 0):.2f}%\n"
+                
+                timeframe_desc = {
+                    "short_term": "1-3 months",
+                    "medium_term": "6-12 months",
+                    "long_term": "1-3 years"
+                }.get(timeframe, "short to medium term")
+                
+                prompt = (
+                    "You are a market strategist specializing in Indian markets. "
+                    f"Provide a {timeframe_desc} outlook for the Indian market"
+                    f"{' with focus on the selected sectors' if sectors else ''}. "
+                    "Consider current market conditions, economic factors, and potential "
+                    "catalysts. Tailor your outlook specifically for Indian investors.\n\n"
+                    f"{context}\n\n"
+                    "Format your outlook with the following sections:\n"
+                    "1. Market Overview (current positioning and sentiment)\n"
+                    "2. Key Drivers (factors likely to influence market direction)\n"
+                    f"3. {timeframe.replace('_', ' ').title()} Outlook (probable scenarios and targets)\n"
+                    "4. Investment Strategy (recommendations for the period)\n"
+                )
+                
+                report_content = self.groq_client.analyze_finance(prompt)
+            
+            else:
+                return {
+                    "error": f"Unsupported report type: {report_type}",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
+            return {
+                "report_type": report_type,
+                "content": report_content,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error generating {report_type} report: {str(e)}")
+            return {
+                "report_type": report_type,
+                "content": f"Unable to generate {report_type} report due to an error. Please try again later.",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
 
-# Create financial agent instance
+
+# Initialize global instance
 financial_agent = FinancialAgent()

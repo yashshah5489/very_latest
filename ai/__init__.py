@@ -1,3 +1,1 @@
-"""
-AI Package for Indian Financial Analyzer
-"""
+# AI package for Indian Financial Analyzer

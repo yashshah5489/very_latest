@@ -1,278 +1,455 @@
 """
-Stock Data Module for Indian Financial Analyzer
+Indian Stock Market Data Provider
 """
-import requests
+import os
 import json
 import logging
+import random
+import requests
 from datetime import datetime, timedelta
-import pandas as pd
-import config
+from typing import Dict, List, Any, Optional, Union
 
 logger = logging.getLogger(__name__)
 
-class IndianStockData:
-    """Class for retrieving Indian stock market data"""
+class StockData:
+    """Provider for Indian stock market data"""
     
     def __init__(self):
-        """Initialize the stock data retriever"""
-        # Define common Indian market indices
-        self.indices = {
-            "NIFTY50": "^NSEI",
-            "SENSEX": "^BSESN", 
-            "NIFTYBANK": "^NSEBANK",
-            "NIFTYMIDCAP": "NIFTY_MIDCAP_50.NS"
+        """Initialize the stock data provider."""
+        self.nse_base_url = "https://www.nseindia.com/api"
+        self.bse_base_url = "https://api.bseindia.com/BseIndiaAPI/api"
+        
+        # Headers to mimic a browser request
+        self.headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br"
         }
-    
-    def get_stock_price(self, symbol, days=30):
-        """
-        Get historical stock prices for an Indian stock
         
-        Args:
-            symbol (str): Stock symbol (use .NS suffix for NSE, .BO for BSE)
-            days (int): Number of days to retrieve
-            
+    def get_market_overview(self) -> Dict[str, Any]:
+        """
+        Get an overview of the Indian market with major indices.
+        
         Returns:
-            dict: Historical price data
+            Dictionary with market data
         """
-        # Add .NS suffix if not present and not an index
-        if not (symbol.endswith('.NS') or symbol.endswith('.BO') or symbol.startswith('^')):
-            symbol = f"{symbol}.NS"  # Default to NSE
-            
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=days)
-        
-        # Format dates for API
-        start_str = start_date.strftime('%Y-%m-%d')
-        end_str = end_date.strftime('%Y-%m-%d')
-        
-        # Use Yahoo Finance API (via rapidapi or direct)
         try:
-            # This is a simplified version using direct HTTP requests
-            # In production, use a proper API service with your API key
+            # In a production system, we would make API calls to NSE/BSE APIs
+            # For demo purposes, we'll generate sample data
             
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
-            params = {
-                "period1": int(start_date.timestamp()),
-                "period2": int(end_date.timestamp()),
-                "interval": "1d"
-            }
+            current_date = datetime.now().strftime("%Y-%m-%d")
+            nifty_value = 22500 + random.uniform(-100, 100)
+            nifty_change = random.uniform(-100, 100)
+            nifty_change_percent = (nifty_change / (nifty_value - nifty_change)) * 100
             
-            headers = {
-                "User-Agent": "Mozilla/5.0"  # Simple user agent to avoid blocking
-            }
+            sensex_value = 74000 + random.uniform(-300, 300)
+            sensex_change = random.uniform(-300, 300)
+            sensex_change_percent = (sensex_change / (sensex_value - sensex_change)) * 100
             
-            response = requests.get(url, params=params, headers=headers)
-            response.raise_for_status()
-            data = response.json()
+            nifty_bank_value = 48000 + random.uniform(-200, 200)
+            nifty_bank_change = random.uniform(-200, 200)
+            nifty_bank_change_percent = (nifty_bank_change / (nifty_bank_value - nifty_bank_change)) * 100
             
-            # Process and format the data
-            return self._process_price_data(data, symbol)
-        
-        except Exception as e:
-            logger.error(f"Error fetching stock data for {symbol}: {str(e)}")
-            return {"error": str(e), "data": []}
-    
-    def _process_price_data(self, raw_data, symbol):
-        """Process and format raw price data from Yahoo Finance"""
-        try:
-            result = {"symbol": symbol, "data": []}
-            
-            # Extract chart data
-            chart = raw_data.get("chart", {})
-            result_set = chart.get("result", [])
-            
-            if not result_set:
-                return result
-                
-            # Get the first result
-            data_set = result_set[0]
-            
-            # Extract timestamps, open, high, low, close, volume
-            timestamps = data_set.get("timestamp", [])
-            quote = data_set.get("indicators", {}).get("quote", [{}])[0]
-            
-            opens = quote.get("open", [])
-            highs = quote.get("high", [])
-            lows = quote.get("low", [])
-            closes = quote.get("close", [])
-            volumes = quote.get("volume", [])
-            
-            # Format data points
-            for i in range(len(timestamps)):
-                if i < len(closes) and closes[i] is not None:
-                    data_point = {
-                        "date": datetime.fromtimestamp(timestamps[i]).strftime('%Y-%m-%d'),
-                        "open": opens[i] if i < len(opens) and opens[i] is not None else None,
-                        "high": highs[i] if i < len(highs) and highs[i] is not None else None,
-                        "low": lows[i] if i < len(lows) and lows[i] is not None else None,
-                        "close": closes[i],
-                        "volume": volumes[i] if i < len(volumes) and volumes[i] is not None else 0
+            # Sample market data
+            return {
+                "date": current_date,
+                "indices": [
+                    {
+                        "name": "NIFTY 50",
+                        "value": nifty_value,
+                        "change": nifty_change,
+                        "change_percent": nifty_change_percent,
+                        "high": nifty_value + random.uniform(10, 50),
+                        "low": nifty_value - random.uniform(10, 50),
+                        "volume": random.randint(100000000, 200000000)
+                    },
+                    {
+                        "name": "BSE SENSEX",
+                        "value": sensex_value,
+                        "change": sensex_change,
+                        "change_percent": sensex_change_percent,
+                        "high": sensex_value + random.uniform(30, 150),
+                        "low": sensex_value - random.uniform(30, 150),
+                        "volume": random.randint(100000000, 200000000)
+                    },
+                    {
+                        "name": "NIFTY BANK",
+                        "value": nifty_bank_value,
+                        "change": nifty_bank_change,
+                        "change_percent": nifty_bank_change_percent,
+                        "high": nifty_bank_value + random.uniform(20, 100),
+                        "low": nifty_bank_value - random.uniform(20, 100),
+                        "volume": random.randint(50000000, 100000000)
                     }
-                    result["data"].append(data_point)
+                ],
+                "advances": random.randint(1000, 1500),
+                "declines": random.randint(1000, 1500),
+                "unchanged": random.randint(100, 300),
+                "total_volume": random.randint(5000000000, 8000000000)
+            }
             
-            # Add company name if available
-            meta = data_set.get("meta", {})
-            result["name"] = meta.get("symbol", symbol)
-            
-            # Calculate summary metrics
-            if result["data"]:
-                latest = result["data"][-1]
-                earliest = result["data"][0]
-                result["latest_price"] = latest["close"]
-                result["change"] = latest["close"] - earliest["close"]
-                result["change_percent"] = (result["change"] / earliest["close"]) * 100
-            
-            return result
-        
         except Exception as e:
-            logger.error(f"Error processing price data: {str(e)}")
-            return {"symbol": symbol, "error": str(e), "data": []}
-    
-    def get_company_info(self, symbol):
+            logger.error(f"Error getting market overview: {str(e)}")
+            return {"error": str(e)}
+            
+    def get_sector_performance(self) -> Dict[str, Any]:
         """
-        Get basic company information for an Indian stock
+        Get performance data for market sectors.
+        
+        Returns:
+            Dictionary with sector performance data
+        """
+        try:
+            # In a production system, we would make API calls to NSE/BSE APIs
+            # For demo purposes, we'll generate sample data
+            
+            # List of Indian market sectors
+            sectors = [
+                "IT", "Banking", "Financial Services", "FMCG", "Pharma", 
+                "Auto", "Metal", "Energy", "Reality", "Media"
+            ]
+            
+            # Generate random performance for each sector
+            sector_data = []
+            for sector in sectors:
+                change = random.uniform(-3, 3)
+                value = random.uniform(10000, 20000)
+                
+                sector_data.append({
+                    "name": sector,
+                    "value": value,
+                    "change": change,
+                    "change_percent": change  # In a real implementation, would calculate properly
+                })
+            
+            # Sort by change (descending) to show best/worst performing
+            sector_data.sort(key=lambda x: x["change"], reverse=True)
+            
+            return {
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "sectors": sector_data,
+                "top_sector": sector_data[0]["name"],
+                "bottom_sector": sector_data[-1]["name"]
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting sector performance: {str(e)}")
+            return {"error": str(e)}
+            
+    def get_stock_price(self, symbol: str) -> Dict[str, Any]:
+        """
+        Get current price data for a stock.
         
         Args:
-            symbol (str): Stock symbol (use .NS suffix for NSE, .BO for BSE)
+            symbol: Stock symbol
             
         Returns:
-            dict: Company information
+            Dictionary with stock price data
         """
-        # Add .NS suffix if not present and not an index
-        if not (symbol.endswith('.NS') or symbol.endswith('.BO') or symbol.startswith('^')):
-            symbol = f"{symbol}.NS"  # Default to NSE
-            
         try:
-            url = f"https://query1.finance.yahoo.com/v7/finance/options/{symbol}"
-            headers = {"User-Agent": "Mozilla/5.0"}
+            # Normalize symbol (remove NSE/BSE suffixes if present)
+            symbol = symbol.split('.')[0].strip().upper()
             
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            data = response.json()
+            # In a production system, we would make API calls to NSE/BSE APIs
+            # For demo purposes, we'll generate sample data
             
-            # Extract company information
-            result = {
+            # Generate random price data
+            price = random.uniform(500, 2000)
+            prev_close = price - random.uniform(-50, 50)
+            change = price - prev_close
+            change_percent = (change / prev_close) * 100
+            
+            volume = random.randint(100000, 1000000)
+            avg_volume = volume * random.uniform(0.8, 1.2)
+            
+            # Performance for different time periods
+            performance = {
+                "1d": change_percent,
+                "1w": random.uniform(-5, 5),
+                "1m": random.uniform(-10, 10),
+                "3m": random.uniform(-15, 15),
+                "6m": random.uniform(-20, 20),
+                "1y": random.uniform(-30, 30)
+            }
+            
+            return {
                 "symbol": symbol,
-                "name": "",
-                "exchange": "",
-                "sector": "",
-                "industry": "",
-                "current_price": 0,
-                "market_cap": 0,
-                "pe_ratio": 0,
-                "dividend_yield": 0
+                "price": price,
+                "prev_close": prev_close,
+                "open": prev_close + random.uniform(-10, 10),
+                "high": price + random.uniform(1, 10),
+                "low": price - random.uniform(1, 10),
+                "change": change,
+                "change_percent": change_percent,
+                "volume": volume,
+                "avg_volume": avg_volume,
+                "performance": performance,
+                "date": datetime.now().strftime("%Y-%m-%d")
             }
             
-            option_chain = data.get("optionChain", {})
-            result_set = option_chain.get("result", [])
-            
-            if result_set:
-                quote = result_set[0].get("quote", {})
-                result["name"] = quote.get("longName", quote.get("shortName", symbol))
-                result["exchange"] = quote.get("exchange", "")
-                result["current_price"] = quote.get("regularMarketPrice", 0)
-                result["market_cap"] = quote.get("marketCap", 0)
-                result["pe_ratio"] = quote.get("trailingPE", 0)
-                result["dividend_yield"] = quote.get("dividendYield", 0)
-                
-                # Get more details about the company
-                url = f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/{symbol}?modules=assetProfile"
-                response = requests.get(url, headers=headers)
-                if response.status_code == 200:
-                    profile_data = response.json()
-                    asset_profile = profile_data.get("quoteSummary", {}).get("result", [{}])[0].get("assetProfile", {})
-                    result["sector"] = asset_profile.get("sector", "")
-                    result["industry"] = asset_profile.get("industry", "")
-                    result["summary"] = asset_profile.get("longBusinessSummary", "")
-            
-            return result
-            
         except Exception as e:
-            logger.error(f"Error fetching company info for {symbol}: {str(e)}")
-            return {"symbol": symbol, "error": str(e)}
-    
-    def get_market_overview(self):
+            logger.error(f"Error getting stock price for {symbol}: {str(e)}")
+            return {"error": str(e)}
+            
+    def get_company_info(self, symbol: str) -> Dict[str, Any]:
         """
-        Get an overview of Indian market indices
-        
-        Returns:
-            dict: Market overview data with key indices
-        """
-        result = {
-            "indices": [],
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        # Get data for each index
-        for index_name, index_symbol in self.indices.items():
-            try:
-                index_data = self.get_stock_price(index_symbol, days=2)
-                if index_data and "data" in index_data and index_data["data"]:
-                    latest = index_data["data"][-1]
-                    previous = index_data["data"][0] if len(index_data["data"]) > 1 else latest
-                    
-                    index_info = {
-                        "name": index_name,
-                        "symbol": index_symbol,
-                        "value": latest["close"],
-                        "change": latest["close"] - previous["close"],
-                        "change_percent": ((latest["close"] - previous["close"]) / previous["close"]) * 100
-                    }
-                    result["indices"].append(index_info)
-                    
-            except Exception as e:
-                logger.error(f"Error getting data for {index_name}: {str(e)}")
-        
-        return result
-    
-    def get_sector_performance(self, sectors=None):
-        """
-        Get performance data for Indian market sectors
+        Get information about a company.
         
         Args:
-            sectors (list): List of sectors to include, or None for all
+            symbol: Stock symbol
             
         Returns:
-            dict: Sector performance data
+            Dictionary with company information
         """
-        # Default sectors to track in Indian market
-        default_sectors = [
-            {"name": "Information Technology", "symbol": "NIFTYIT.NS"},
-            {"name": "Banking", "symbol": "^NSEBANK"},
-            {"name": "Financial Services", "symbol": "NIFTY_FIN_SERVICE.NS"},
-            {"name": "FMCG", "symbol": "NIFTY_FMCG.NS"},
-            {"name": "Pharma", "symbol": "NIFTY_PHARMA.NS"},
-            {"name": "Auto", "symbol": "NIFTY_AUTO.NS"}
-        ]
+        try:
+            # Normalize symbol (remove NSE/BSE suffixes if present)
+            symbol = symbol.split('.')[0].strip().upper()
+            
+            # In a production system, we would make API calls to NSE/BSE APIs or other data providers
+            # For demo purposes, we'll generate sample data
+            
+            # Use a simple mapping for a few sample stocks
+            companies = {
+                "TCS": {
+                    "name": "Tata Consultancy Services Ltd.",
+                    "sector": "IT",
+                    "industry": "Software",
+                    "description": "Tata Consultancy Services is an Indian multinational information technology services and consulting company.",
+                    "founded": 1968,
+                    "employees": 614000,
+                    "headquarters": "Mumbai, India"
+                },
+                "RELIANCE": {
+                    "name": "Reliance Industries Ltd.",
+                    "sector": "Energy",
+                    "industry": "Oil & Gas",
+                    "description": "Reliance Industries Limited is an Indian multinational conglomerate company, with businesses across energy, petrochemicals, natural gas, retail, telecommunications, mass media, and textiles.",
+                    "founded": 1973,
+                    "employees": 195000,
+                    "headquarters": "Mumbai, India"
+                },
+                "HDFCBANK": {
+                    "name": "HDFC Bank Ltd.",
+                    "sector": "Banking",
+                    "industry": "Private Banking",
+                    "description": "HDFC Bank Limited is an Indian banking and financial services company headquartered in Mumbai.",
+                    "founded": 1994,
+                    "employees": 134000,
+                    "headquarters": "Mumbai, India"
+                },
+                "INFY": {
+                    "name": "Infosys Ltd.",
+                    "sector": "IT",
+                    "industry": "Software",
+                    "description": "Infosys is an Indian multinational information technology company that provides business consulting, information technology and outsourcing services.",
+                    "founded": 1981,
+                    "employees": 335000,
+                    "headquarters": "Bengaluru, India"
+                },
+                "HCLTECH": {
+                    "name": "HCL Technologies Ltd.",
+                    "sector": "IT",
+                    "industry": "Software",
+                    "description": "HCL Technologies Limited is an Indian multinational information technology services and consulting company.",
+                    "founded": 1991,
+                    "employees": 211000,
+                    "headquarters": "Noida, India"
+                }
+            }
+            
+            # Get company info, or generate random data if not in our sample
+            company = companies.get(symbol, {
+                "name": f"{symbol} Corporation Ltd.",
+                "sector": random.choice(["IT", "Banking", "Financial Services", "FMCG", "Pharma", "Auto", "Metal", "Energy"]),
+                "industry": random.choice(["Software", "Hardware", "Banking", "Insurance", "Auto Components", "Pharmaceuticals"]),
+                "description": f"{symbol} is a leading Indian company in its sector.",
+                "founded": random.randint(1970, 2010),
+                "employees": random.randint(1000, 200000),
+                "headquarters": random.choice(["Mumbai", "Bengaluru", "Delhi", "Hyderabad", "Chennai"]) + ", India"
+            })
+            
+            # Add financial data
+            price = random.uniform(500, 2000)
+            company.update({
+                "symbol": symbol,
+                "current_price": price,
+                "market_cap": price * random.randint(100000000, 10000000000),
+                "pe_ratio": random.uniform(10, 40),
+                "eps": random.uniform(10, 100),
+                "book_value": random.uniform(100, 1000),
+                "dividend_yield": random.uniform(0.01, 0.05),
+                "52w_high": price * random.uniform(1.05, 1.2),
+                "52w_low": price * random.uniform(0.8, 0.95),
+                "avg_volume": random.randint(100000, 1000000)
+            })
+            
+            return company
+            
+        except Exception as e:
+            logger.error(f"Error getting company info for {symbol}: {str(e)}")
+            return {"error": str(e)}
+            
+    def search_stocks(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Search for stocks by name or symbol.
         
-        sectors_to_track = sectors or default_sectors
+        Args:
+            query: Search query
+            limit: Maximum number of results to return
+            
+        Returns:
+            List of matching stocks
+        """
+        try:
+            # In a production system, we would search a database or make API calls
+            # For demo purposes, we'll use a sample list of top Indian stocks
+            
+            stocks = [
+                {"symbol": "TCS", "name": "Tata Consultancy Services Ltd.", "sector": "IT"},
+                {"symbol": "RELIANCE", "name": "Reliance Industries Ltd.", "sector": "Energy"},
+                {"symbol": "HDFCBANK", "name": "HDFC Bank Ltd.", "sector": "Banking"},
+                {"symbol": "INFY", "name": "Infosys Ltd.", "sector": "IT"},
+                {"symbol": "HINDUNILVR", "name": "Hindustan Unilever Ltd.", "sector": "FMCG"},
+                {"symbol": "ICICIBANK", "name": "ICICI Bank Ltd.", "sector": "Banking"},
+                {"symbol": "KOTAKBANK", "name": "Kotak Mahindra Bank Ltd.", "sector": "Banking"},
+                {"symbol": "HDFC", "name": "Housing Development Finance Corporation Ltd.", "sector": "Financial Services"},
+                {"symbol": "ITC", "name": "ITC Ltd.", "sector": "FMCG"},
+                {"symbol": "LT", "name": "Larsen & Toubro Ltd.", "sector": "Construction"},
+                {"symbol": "SBIN", "name": "State Bank of India", "sector": "Banking"},
+                {"symbol": "BAJFINANCE", "name": "Bajaj Finance Ltd.", "sector": "Financial Services"},
+                {"symbol": "BHARTIARTL", "name": "Bharti Airtel Ltd.", "sector": "Telecom"},
+                {"symbol": "ASIANPAINT", "name": "Asian Paints Ltd.", "sector": "Consumer Durables"},
+                {"symbol": "MARUTI", "name": "Maruti Suzuki India Ltd.", "sector": "Auto"},
+                {"symbol": "HCLTECH", "name": "HCL Technologies Ltd.", "sector": "IT"},
+                {"symbol": "AXISBANK", "name": "Axis Bank Ltd.", "sector": "Banking"},
+                {"symbol": "WIPRO", "name": "Wipro Ltd.", "sector": "IT"},
+                {"symbol": "SUNPHARMA", "name": "Sun Pharmaceutical Industries Ltd.", "sector": "Pharma"},
+                {"symbol": "TATASTEEL", "name": "Tata Steel Ltd.", "sector": "Metal"}
+            ]
+            
+            # Filter stocks based on query
+            query = query.lower()
+            results = [stock for stock in stocks if 
+                      query in stock["symbol"].lower() or 
+                      query in stock["name"].lower() or
+                      query in stock["sector"].lower()]
+            
+            # Add some random price data
+            for stock in results:
+                stock["current_price"] = random.uniform(500, 2000)
+                stock["change_percent"] = random.uniform(-3, 3)
+            
+            return results[:limit]
+            
+        except Exception as e:
+            logger.error(f"Error searching stocks: {str(e)}")
+            return []
+            
+    def get_historical_data(self, symbol: str, period: str = "1y", interval: str = "1d") -> Dict[str, Any]:
+        """
+        Get historical price data for a stock.
         
-        result = {
-            "sectors": [],
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        # Get data for each sector
-        for sector in sectors_to_track:
-            try:
-                sector_data = self.get_stock_price(sector["symbol"], days=30)
-                if sector_data and "data" in sector_data and sector_data["data"]:
-                    latest = sector_data["data"][-1]
-                    month_ago = sector_data["data"][0] if len(sector_data["data"]) > 1 else latest
+        Args:
+            symbol: Stock symbol
+            period: Time period (1d, 1w, 1m, 3m, 6m, 1y, 5y)
+            interval: Data interval (1m, 5m, 15m, 30m, 1h, 1d, 1w, 1mo)
+            
+        Returns:
+            Dictionary with historical price data
+        """
+        try:
+            # Generate random historical data
+            end_date = datetime.now()
+            
+            # Determine start date based on period
+            if period == "1d":
+                start_date = end_date - timedelta(days=1)
+                data_points = 390  # Stock market open minutes in a day
+            elif period == "1w":
+                start_date = end_date - timedelta(weeks=1)
+                data_points = 5  # 5 trading days
+            elif period == "1m":
+                start_date = end_date - timedelta(days=30)
+                data_points = 22  # ~22 trading days in a month
+            elif period == "3m":
+                start_date = end_date - timedelta(days=90)
+                data_points = 66  # ~66 trading days in 3 months
+            elif period == "6m":
+                start_date = end_date - timedelta(days=180)
+                data_points = 132  # ~132 trading days in 6 months
+            elif period == "1y":
+                start_date = end_date - timedelta(days=365)
+                data_points = 252  # ~252 trading days in a year
+            elif period == "5y":
+                start_date = end_date - timedelta(days=365 * 5)
+                data_points = 252 * 5  # ~1260 trading days in 5 years
+            else:
+                start_date = end_date - timedelta(days=30)
+                data_points = 22
+            
+            # Generate starting price and trend
+            price = random.uniform(500, 2000)
+            trend = random.uniform(-0.0001, 0.0002)  # Daily percentage change trend
+            volatility = random.uniform(0.005, 0.02)  # Daily volatility
+            
+            # Generate data points
+            data = []
+            current_price = price
+            current_date = start_date
+            
+            for i in range(data_points):
+                if current_date.weekday() < 5:  # Only generate for weekdays
+                    daily_change = current_price * (trend + random.normalvariate(0, volatility))
+                    current_price += daily_change
                     
-                    sector_info = {
-                        "name": sector["name"],
-                        "symbol": sector["symbol"],
-                        "current_value": latest["close"],
-                        "monthly_change": latest["close"] - month_ago["close"],
-                        "monthly_change_percent": ((latest["close"] - month_ago["close"]) / month_ago["close"]) * 100
-                    }
-                    result["sectors"].append(sector_info)
+                    # Generate OHLC data
+                    open_price = current_price - daily_change
+                    close_price = current_price
+                    high_price = max(open_price, close_price) + abs(daily_change) * random.uniform(0.2, 0.5)
+                    low_price = min(open_price, close_price) - abs(daily_change) * random.uniform(0.2, 0.5)
+                    volume = random.randint(100000, 1000000)
                     
-            except Exception as e:
-                logger.error(f"Error getting data for sector {sector['name']}: {str(e)}")
-        
-        return result
+                    data.append({
+                        "date": current_date.strftime("%Y-%m-%d"),
+                        "open": open_price,
+                        "high": high_price,
+                        "low": low_price,
+                        "close": close_price,
+                        "volume": volume
+                    })
+                
+                # Move to next data point
+                if interval == "1d":
+                    current_date += timedelta(days=1)
+                elif interval == "1w":
+                    current_date += timedelta(weeks=1)
+                elif interval == "1mo":
+                    current_date += timedelta(days=30)
+                else:
+                    # For intraday intervals, just add data points within the day
+                    minutes_to_add = {
+                        "1m": 1,
+                        "5m": 5,
+                        "15m": 15,
+                        "30m": 30,
+                        "1h": 60
+                    }.get(interval, 1)
+                    
+                    current_date += timedelta(minutes=minutes_to_add)
+            
+            return {
+                "symbol": symbol,
+                "period": period,
+                "interval": interval,
+                "start_date": start_date.strftime("%Y-%m-%d"),
+                "end_date": end_date.strftime("%Y-%m-%d"),
+                "data": data
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting historical data for {symbol}: {str(e)}")
+            return {"error": str(e)}
 
-# Create stock data instance
-stock_data = IndianStockData()
+
+# Initialize global instance
+stock_data = StockData()

@@ -1,119 +1,231 @@
 """
-News Extraction Module for Indian Financial Analyzer using Tavily API
+News Extractor using Tavily API
 """
-import requests
+import os
 import json
 import logging
-from datetime import datetime
-import config
+import requests
+from datetime import datetime, timedelta
+from typing import Dict, List, Any, Optional, Union
 
 logger = logging.getLogger(__name__)
 
-class TavilyNewsExtractor:
-    """Class for extracting financial news using Tavily API with focus on Indian markets"""
+class NewsExtractor:
+    """News extraction service using Tavily API"""
     
     def __init__(self, api_key=None):
-        """Initialize the news extractor with the Tavily API key"""
-        self.api_key = api_key or config.TAVILY_API_KEY
-        self.api_url = "https://api.tavily.com/search"
-        
-        if not self.api_key:
-            logger.warning("Tavily API key not provided. News extraction functionality will be limited.")
-    
-    def search_financial_news(self, query, max_results=5, include_domains=None, exclude_domains=None, search_depth="advanced"):
         """
-        Search for financial news using Tavily API
+        Initialize news extractor with Tavily API key.
         
         Args:
-            query (str): Search query string (e.g., "HDFC Bank quarterly results")
-            max_results (int): Maximum number of results to return
-            include_domains (list): List of domains to include in the search
-            exclude_domains (list): List of domains to exclude from the search
-            search_depth (str): Search depth (basic, advanced, or comprehensive)
+            api_key: Optional Tavily API key
+        """
+        self.api_key = api_key or os.environ.get("TAVILY_API_KEY")
+        if not self.api_key:
+            logger.warning("No Tavily API key provided. Set the TAVILY_API_KEY environment variable.")
+        
+        self.api_base = "https://api.tavily.com/v1"
+        
+    def _make_request(self, endpoint: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Make a request to the Tavily API.
+        
+        Args:
+            endpoint: API endpoint
+            params: Request parameters
             
         Returns:
-            dict: Search results with news articles
+            API response as a dictionary
         """
         if not self.api_key:
-            logger.error("Tavily API key is required for news extraction")
-            return {"error": "API key is required", "articles": []}
+            return {"error": "API key not configured. Please set TAVILY_API_KEY environment variable."}
         
-        # Default to Indian financial news sources if not specified
-        if not include_domains:
-            include_domains = [
-                "economictimes.indiatimes.com",
-                "moneycontrol.com",
-                "livemint.com",
-                "business-standard.com",
-                "financialexpress.com",
-                "thehindubusinessline.com"
-            ]
-        
-        params = {
-            "api_key": self.api_key,
-            "query": query,
-            "search_depth": search_depth,
-            "max_results": max_results
-        }
-        
-        if include_domains:
-            params["include_domains"] = include_domains
-        
-        if exclude_domains:
-            params["exclude_domains"] = exclude_domains
+        headers = {"x-api-key": self.api_key}
         
         try:
-            response = requests.get(self.api_url, params=params)
+            response = requests.post(
+                f"{self.api_base}/{endpoint}",
+                headers=headers,
+                json=params
+            )
             response.raise_for_status()
-            return self._process_results(response.json())
+            return response.json()
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error fetching news from Tavily API: {str(e)}")
-            return {"error": str(e), "articles": []}
-    
-    def _process_results(self, results):
-        """Process and format the API results"""
-        if not results or "results" not in results:
-            return {"articles": []}
+            logger.error(f"Error calling Tavily API: {str(e)}")
+            return {"error": str(e)}
+        
+    def _parse_search_results(self, results: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Parse search results from the Tavily API.
+        
+        Args:
+            results: Raw search results from the API
+            
+        Returns:
+            Parsed news data
+        """
+        if "error" in results:
+            return results
+            
+        if "results" not in results:
+            return {"error": "No results found in API response"}
         
         articles = []
         for result in results.get("results", []):
+            # Extract data from each result
             article = {
                 "title": result.get("title", ""),
-                "content": result.get("content", ""),
                 "url": result.get("url", ""),
-                "published_date": result.get("published_date", datetime.now().isoformat()),
-                "source": result.get("source", ""),
-                "relevance_score": result.get("relevance_score", 0),
-                "retrieved_at": datetime.now().isoformat()
+                "content": result.get("content", ""),
+                "source": result.get("source", "Unknown"),
+                "published_date": result.get("published_date", "")
             }
             articles.append(article)
         
         return {
             "articles": articles,
+            "search_id": results.get("search_id", ""),
             "count": len(articles)
         }
-    
-    def get_market_news(self, market="Indian", limit=10):
-        """Get latest news for a specific market (defaults to Indian market)"""
-        query = f"{market} stock market latest news"
-        return self.search_financial_news(query, max_results=limit)
-    
-    def get_stock_news(self, symbol, company_name=None, limit=5):
-        """Get news for a specific stock"""
-        company = company_name or symbol
-        query = f"{company} stock {symbol} latest news India"
-        return self.search_financial_news(query, max_results=limit)
-    
-    def get_sector_news(self, sector, limit=5):
-        """Get news for a specific sector in the Indian market"""
-        query = f"India {sector} sector latest financial news"
-        return self.search_financial_news(query, max_results=limit)
-    
-    def get_economic_indicators(self, limit=5):
-        """Get news about Indian economic indicators"""
-        query = "India latest economic indicators GDP inflation interest rates"
-        return self.search_financial_news(query, max_results=limit)
+        
+    def search_financial_news(self, query: str, max_results: int = 10) -> Dict[str, Any]:
+        """
+        Search for financial news based on a query.
+        
+        Args:
+            query: Search query string
+            max_results: Maximum number of results to return
+            
+        Returns:
+            Dictionary containing news articles
+        """
+        # Append "India" to the query for India-specific results
+        if "india" not in query.lower() and "indian" not in query.lower():
+            query = f"{query} India"
+            
+        params = {
+            "query": query,
+            "search_depth": "advanced",
+            "include_answer": False,
+            "include_domains": [
+                "moneycontrol.com", "economictimes.indiatimes.com", 
+                "livemint.com", "thehindubusinessline.com", 
+                "financialexpress.com", "business-standard.com",
+                "investing.com", "cnbctv18.com", "ndtv.com/business",
+                "bloomberg.com", "reuters.com", "ft.com"
+            ],
+            "max_results": max_results
+        }
+        
+        results = self._make_request("search", params)
+        return self._parse_search_results(results)
+        
+    def get_market_news(self, market: str = "Indian", limit: int = 10) -> Dict[str, Any]:
+        """
+        Get general market news.
+        
+        Args:
+            market: Market to get news for (default: "Indian")
+            limit: Maximum number of news items to return
+            
+        Returns:
+            Dictionary containing news articles
+        """
+        query = f"{market} stock market news latest updates"
+        return self.search_financial_news(query, limit)
+        
+    def get_stock_news(self, symbol: str, limit: int = 10) -> Dict[str, Any]:
+        """
+        Get news for a specific stock.
+        
+        Args:
+            symbol: Stock symbol
+            limit: Maximum number of news items to return
+            
+        Returns:
+            Dictionary containing news articles
+        """
+        query = f"{symbol} stock news latest updates India"
+        return self.search_financial_news(query, limit)
+        
+    def get_sector_news(self, sector: str, limit: int = 10) -> Dict[str, Any]:
+        """
+        Get news for a specific market sector.
+        
+        Args:
+            sector: Market sector (e.g. "Technology", "Banking")
+            limit: Maximum number of news items to return
+            
+        Returns:
+            Dictionary containing news articles
+        """
+        query = f"Indian {sector} sector stock market news latest updates"
+        return self.search_financial_news(query, limit)
+        
+    def get_economic_indicators(self, limit: int = 10) -> Dict[str, Any]:
+        """
+        Get news about economic indicators.
+        
+        Args:
+            limit: Maximum number of news items to return
+            
+        Returns:
+            Dictionary containing news articles
+        """
+        query = "Indian economic indicators RBI inflation GDP growth latest updates"
+        return self.search_financial_news(query, limit)
+        
+    def get_company_news(self, company_name: str, limit: int = 10) -> Dict[str, Any]:
+        """
+        Get news for a specific company by name.
+        
+        Args:
+            company_name: Company name
+            limit: Maximum number of news items to return
+            
+        Returns:
+            Dictionary containing news articles
+        """
+        query = f"{company_name} company news India latest updates"
+        return self.search_financial_news(query, limit)
+        
+    def get_financial_insights(self, topic: str, limit: int = 10) -> Dict[str, Any]:
+        """
+        Get financial insights on a specific topic.
+        
+        Args:
+            topic: Financial topic
+            limit: Maximum number of results to return
+            
+        Returns:
+            Dictionary containing news articles with insights
+        """
+        query = f"Indian financial insights analysis {topic}"
+        
+        params = {
+            "query": query,
+            "search_depth": "advanced",
+            "include_answer": True,  # Include Tavily's generated answer for insights
+            "include_domains": [
+                "moneycontrol.com", "economictimes.indiatimes.com", 
+                "livemint.com", "thehindubusinessline.com", 
+                "financialexpress.com", "business-standard.com",
+                "investing.com", "cnbctv18.com", "ndtv.com/business",
+                "bloomberg.com", "reuters.com", "ft.com"
+            ],
+            "max_results": limit
+        }
+        
+        results = self._make_request("search", params)
+        
+        # Parse results and add the generated answer as insights if available
+        parsed_results = self._parse_search_results(results)
+        
+        if "answer" in results:
+            parsed_results["insights"] = results["answer"]
+            
+        return parsed_results
 
 
-# Create an instance of the news extractor
-news_extractor = TavilyNewsExtractor()
+# Initialize global instance
+news_extractor = NewsExtractor()

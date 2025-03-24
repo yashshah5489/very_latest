@@ -1,3 +1,1 @@
-"""
-Data Sources Package for Indian Financial Analyzer
-"""
+# Data sources package for Indian Financial Analyzer

@@ -3,58 +3,32 @@ Configuration settings for the Indian Financial Analyzer
 """
 import os
 
-# MongoDB Configuration
-MONGODB_URI = os.environ.get("MONGODB_URI", "mongodb://localhost:27017")
-MONGODB_DB = os.environ.get("MONGODB_DB", "indian_financial_analyzer")
-
-# Collections
-COLLECTION_STOCKS = "indian_stocks"
-COLLECTION_MARKET_DATA = "market_data"
-COLLECTION_USER_PORTFOLIOS = "user_portfolios"
-COLLECTION_FINANCIAL_BOOKS = "financial_books"
-COLLECTION_NEWS = "financial_news"
-COLLECTION_ANALYSIS = "analysis_results"
-
-# API Keys and External Services
-TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-
-# Indian Financial Market Settings
-DEFAULT_INDEX = "NIFTY50"  # Default Indian market index
-SUPPORTED_INDICES = ["NIFTY50", "SENSEX", "NIFTYBANK", "NIFTYMIDCAP"]
-
-# Common Indian stock tickers for demonstration
-DEMO_STOCK_TICKERS = [
-    "RELIANCE.NS",  # Reliance Industries
-    "TCS.NS",       # Tata Consultancy Services
-    "HDFCBANK.NS",  # HDFC Bank
-    "INFY.NS",      # Infosys
-    "HINDUNILVR.NS" # Hindustan Unilever
-]
-
-# Financial Books for RAG
-FINANCIAL_BOOKS = [
-    {
-        "id": "rich_dad_poor_dad",
-        "title": "Rich Dad Poor Dad",
-        "author": "Robert Kiyosaki",
-        "path": "data/books/rich_dad_poor_dad.txt"
-    },
-    {
-        "id": "psychology_of_money",
-        "title": "The Psychology of Money",
-        "author": "Morgan Housel",
-        "path": "data/books/psychology_of_money.txt"
-    },
-    {
-        "id": "richest_man_in_babylon",
-        "title": "The Richest Man in Babylon",
-        "author": "George S. Clason",
-        "path": "data/books/richest_man_in_babylon.txt"
-    }
-]
-
 # Application settings
 APP_NAME = "Indian Financial Analyzer"
-DEBUG = True
-SECRET_KEY = os.environ.get("SECRET_KEY", "development-secret-key")
+APP_VERSION = "1.0.0"
+APP_DESCRIPTION = "AI-powered financial analysis for Indian markets"
+
+# Logging settings
+LOG_LEVEL = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+LOG_FILE = "indian_financial_analyzer.log"
+
+# API Keys
+# These are loaded from environment variables
+TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+
+# Database settings
+MONGODB_URI = os.environ.get("MONGODB_URI", "mongodb://localhost:27017")
+MONGODB_DB_NAME = os.environ.get("MONGODB_DB_NAME", "indian_financial_analyzer")
+
+# File paths
+DATA_DIR = "data"
+BOOKS_DIR = os.path.join(DATA_DIR, "books")
+CACHE_DIR = os.path.join(DATA_DIR, "cache")
+
+# Ensure directories exist
+os.makedirs(BOOKS_DIR, exist_ok=True)
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+# Market settings
+DEFAULT_MARKET = "Indian"
