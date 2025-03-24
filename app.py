@@ -13,8 +13,11 @@ from data_sources.news_extractor import news_extractor
 from data_sources.stock_data import stock_data
 from ai.groq_client import GroqClient
 groq_client = GroqClient()
-from ai.rag_system import rag_system
+from ai.rag_system import rag_system, initialize_rag_system
 from ai.financial_agent import financial_agent
+
+# Initialize RAG system
+initialize_rag_system()
 
 # Set up Flask app
 app = Flask(__name__)

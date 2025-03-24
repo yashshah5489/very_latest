@@ -11,7 +11,6 @@ from typing import Dict, List, Any, Optional, Tuple, Union
 from pathlib import Path
 import markdown
 import chromadb
-from chromadb.config import Settings
 from chromadb.utils import embedding_functions
 
 from ai.groq_client import GroqClient
@@ -42,10 +41,8 @@ class RAGSystem:
         os.makedirs(self.embeddings_dir, exist_ok=True)
         
         # Initialize the ChromaDB client
-        self.chroma_client = chromadb.Client(Settings(
-            chroma_db_impl="duckdb+parquet",
-            persist_directory=str(self.embeddings_dir / "chroma_db")
-        ))
+        persist_dir = str(self.embeddings_dir / "chroma_db")
+        self.chroma_client = chromadb.PersistentClient(path=persist_dir)
         
         # Use a default embedding function that's lightweight but effective
         self.embedding_function = embedding_functions.DefaultEmbeddingFunction()
@@ -216,7 +213,7 @@ class RAGSystem:
             
             # Check if this collection already exists in ChromaDB
             existing_collections = self.chroma_client.list_collections()
-            collection_exists = any(collection.name == collection_name for collection in existing_collections)
+            collection_exists = collection_name in existing_collections
             
             if collection_exists:
                 logger.info(f"Collection for {book_id} already exists in ChromaDB, skipping processing")
