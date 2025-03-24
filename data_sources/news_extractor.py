@@ -40,7 +40,10 @@ class NewsExtractor:
         if not self.api_key:
             return {"error": "API key not configured. Please set TAVILY_API_KEY environment variable."}
         
-        headers = {"x-api-key": self.api_key}
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}"
+        }
         
         try:
             response = requests.post(
