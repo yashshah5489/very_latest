@@ -44,6 +44,7 @@ TAVILY_RATE_LIMIT_PER_DAY = int(os.environ.get("TAVILY_RATE_LIMIT_PER_DAY", "50"
 GROQ_RATE_LIMIT_PER_DAY = int(os.environ.get("GROQ_RATE_LIMIT_PER_DAY", "100"))  # Conservative daily limit for Groq API
 ENABLE_RESPONSE_CACHING = os.environ.get("ENABLE_RESPONSE_CACHING", "True").lower() == "true"
 CACHE_EXPIRY_SECONDS = int(os.environ.get("CACHE_EXPIRY_SECONDS", "3600"))  # Default 1 hour cache for API responses
+CACHE_DIR = os.environ.get("CACHE_DIR", os.path.join(os.path.dirname(__file__), "data", "cache"))
 
 # Financial book settings
 FINANCIAL_BOOKS = [

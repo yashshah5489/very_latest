@@ -1,17 +1,27 @@
 """
-News Extractor using Tavily API
+News Extractor using Tavily API with caching to conserve API usage limits
 """
 import os
 import json
 import logging
 import requests
+import hashlib
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Union
 
-logger = logging.getLogger(__name__)
+# Import cache manager for API usage optimization
+try:
+    from utils.cache_manager import cache_manager
+except ImportError:
+    # Fallback if the cache manager is not available
+    cache_manager = None
+    logger = logging.getLogger(__name__)
+    logger.warning("Cache manager not available, API usage will not be optimized")
+else:
+    logger = logging.getLogger(__name__)
 
 class NewsExtractor:
-    """News extraction service using Tavily API"""
+    """News extraction service using Tavily API with caching to minimize API usage"""
     
     def __init__(self, api_key=None):
         """
@@ -25,10 +35,14 @@ class NewsExtractor:
             logger.warning("No Tavily API key provided. Set the TAVILY_API_KEY environment variable.")
         
         self.api_base = "https://api.tavily.com/v1"
+        self.search_endpoint = f"{self.api_base}/search"
+        
+        # Check if caching is available
+        self.caching_enabled = cache_manager is not None
         
     def _make_request(self, endpoint: str, params: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Make a request to the Tavily API.
+        Make a request to the Tavily API with caching to minimize API usage.
         
         Args:
             endpoint: API endpoint
@@ -40,19 +54,44 @@ class NewsExtractor:
         if not self.api_key:
             return {"error": "API key not configured. Please set TAVILY_API_KEY environment variable."}
         
+        # Generate a cache key from the endpoint and params
+        cache_key = f"tavily_{endpoint}_{hashlib.md5(json.dumps(params, sort_keys=True).encode()).hexdigest()}"
+        
+        # Check if we have a cached response
+        if self.caching_enabled:
+            cached_response = cache_manager.get(cache_key)
+            if cached_response:
+                logger.info(f"Using cached response for Tavily API request to {endpoint}")
+                return cached_response
+            
+            # Check if we have exceeded the rate limit
+            if not cache_manager.track_api_call("tavily"):
+                logger.warning("Tavily API daily rate limit exceeded")
+                return {"error": "Daily rate limit for Tavily API exceeded. Try again tomorrow."}
+        
+        # Make the API request
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
         }
         
         try:
+            url = self.search_endpoint if endpoint == "search" else f"{self.api_base}/{endpoint}"
+            logger.info(f"Making Tavily API request to {url}")
+            
             response = requests.post(
-                f"{self.api_base}/{endpoint}",
+                url,
                 headers=headers,
                 json=params
             )
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+            
+            # Cache the successful response
+            if self.caching_enabled and "error" not in result:
+                cache_manager.set(cache_key, result)
+                
+            return result
         except requests.exceptions.RequestException as e:
             logger.error(f"Error calling Tavily API: {str(e)}")
             return {"error": str(e)}

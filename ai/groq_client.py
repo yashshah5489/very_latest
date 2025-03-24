@@ -1,9 +1,11 @@
 """
 Groq LLM Client for Indian Financial Analyzer using LangChain
+with caching to conserve API usage limits
 """
 import os
 import json
 import logging
+import hashlib
 from typing import Dict, Any, List, Optional, Union
 
 from langchain.chains import LLMChain
@@ -11,7 +13,16 @@ from langchain.prompts import PromptTemplate
 from langchain_groq import ChatGroq
 from langchain.schema.output_parser import StrOutputParser
 
-logger = logging.getLogger(__name__)
+# Import cache manager for API usage optimization
+try:
+    from utils.cache_manager import cache_manager
+except ImportError:
+    # Fallback if the cache manager is not available
+    cache_manager = None
+    logger = logging.getLogger(__name__)
+    logger.warning("Cache manager not available, Groq API usage will not be optimized")
+else:
+    logger = logging.getLogger(__name__)
 
 class GroqClient:
     """Client for Groq LLM API using LangChain"""
