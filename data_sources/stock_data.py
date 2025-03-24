@@ -1,23 +1,29 @@
 """
-Indian Stock Market Data Provider
+Indian Stock Market Data Provider using Yahoo Finance
 """
 import os
 import json
 import logging
-import random
 import requests
+import random
+import yfinance as yf
+import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Union
+from utils.cache_manager import CacheManager
 
 logger = logging.getLogger(__name__)
 
 class StockData:
-    """Provider for Indian stock market data"""
+    """Provider for Indian stock market data using Yahoo Finance"""
     
     def __init__(self):
         """Initialize the stock data provider."""
-        self.nse_base_url = "https://www.nseindia.com/api"
-        self.bse_base_url = "https://api.bseindia.com/BseIndiaAPI/api"
+        # For Indian stocks, we need to append .NS for NSE stocks
+        self.default_exchange = ".NS"
+        
+        # Initialize cache manager for Yahoo Finance API calls
+        self.cache = CacheManager(cache_dir="data/cache", enabled=True)
         
         # Headers to mimic a browser request
         self.headers = {
@@ -26,67 +32,90 @@ class StockData:
             "Accept-Encoding": "gzip, deflate, br"
         }
         
+        # Major Indian market indices with their Yahoo Finance symbols
+        self.market_indices = {
+            "NIFTY 50": "^NSEI",
+            "BSE SENSEX": "^BSESN",
+            "NIFTY BANK": "^NSEBANK",
+            "NIFTY IT": "^CNXIT",
+            "NIFTY PHARMA": "^CNXPHARMA",
+            "NIFTY AUTO": "^CNXAUTO"
+        }
+        
     def get_market_overview(self) -> Dict[str, Any]:
         """
-        Get an overview of the Indian market with major indices.
+        Get an overview of the Indian market with major indices using Yahoo Finance.
         
         Returns:
             Dictionary with market data
         """
         try:
-            # In a production system, we would make API calls to NSE/BSE APIs
-            # For demo purposes, we'll generate sample data
+            # Check if we have a cached response
+            cache_key = f"market_overview_{datetime.now().strftime('%Y-%m-%d_%H')}"
+            cached_data = self.cache.get(cache_key)
+            if cached_data:
+                return cached_data
             
-            current_date = datetime.now().strftime("%Y-%m-%d")
-            nifty_value = 22500 + random.uniform(-100, 100)
-            nifty_change = random.uniform(-100, 100)
-            nifty_change_percent = (nifty_change / (nifty_value - nifty_change)) * 100
+            # Get data for major Indian indices
+            indices_data = []
+            total_volume = 0
             
-            sensex_value = 74000 + random.uniform(-300, 300)
-            sensex_change = random.uniform(-300, 300)
-            sensex_change_percent = (sensex_change / (sensex_value - sensex_change)) * 100
+            for name, symbol in self.market_indices.items():
+                # Get the index data from Yahoo Finance
+                index = yf.Ticker(symbol)
+                
+                # Get the current data
+                current_data = index.history(period="2d")
+                
+                if len(current_data) < 2:
+                    logger.warning(f"Insufficient historical data for {name} ({symbol})")
+                    continue
+                
+                # Get the last full trading day data
+                current = current_data.iloc[-1]
+                prev = current_data.iloc[-2]
+                
+                # Calculate changes
+                value = current['Close']
+                prev_close = prev['Close']
+                change = value - prev_close
+                change_percent = (change / prev_close) * 100
+                
+                index_data = {
+                    "name": name,
+                    "value": round(value, 2),
+                    "change": round(change, 2),
+                    "change_percent": round(change_percent, 2),
+                    "high": round(current['High'], 2),
+                    "low": round(current['Low'], 2),
+                    "volume": int(current['Volume']) if not pd.isna(current['Volume']) else 0,
+                    "symbol": symbol
+                }
+                
+                indices_data.append(index_data)
+                total_volume += index_data["volume"]
             
-            nifty_bank_value = 48000 + random.uniform(-200, 200)
-            nifty_bank_change = random.uniform(-200, 200)
-            nifty_bank_change_percent = (nifty_bank_change / (nifty_bank_value - nifty_bank_change)) * 100
+            # For advances/declines, we would need additional data sources
+            # Since these aren't readily available from Yahoo Finance, we'll estimate
+            # based on the indices' performance
+            positive_indices = sum(1 for idx in indices_data if idx["change"] > 0)
+            negative_indices = sum(1 for idx in indices_data if idx["change"] < 0)
             
-            # Sample market data
-            return {
-                "date": current_date,
-                "indices": [
-                    {
-                        "name": "NIFTY 50",
-                        "value": nifty_value,
-                        "change": nifty_change,
-                        "change_percent": nifty_change_percent,
-                        "high": nifty_value + random.uniform(10, 50),
-                        "low": nifty_value - random.uniform(10, 50),
-                        "volume": random.randint(100000000, 200000000)
-                    },
-                    {
-                        "name": "BSE SENSEX",
-                        "value": sensex_value,
-                        "change": sensex_change,
-                        "change_percent": sensex_change_percent,
-                        "high": sensex_value + random.uniform(30, 150),
-                        "low": sensex_value - random.uniform(30, 150),
-                        "volume": random.randint(100000000, 200000000)
-                    },
-                    {
-                        "name": "NIFTY BANK",
-                        "value": nifty_bank_value,
-                        "change": nifty_bank_change,
-                        "change_percent": nifty_bank_change_percent,
-                        "high": nifty_bank_value + random.uniform(20, 100),
-                        "low": nifty_bank_value - random.uniform(20, 100),
-                        "volume": random.randint(50000000, 100000000)
-                    }
-                ],
-                "advances": random.randint(1000, 1500),
-                "declines": random.randint(1000, 1500),
-                "unchanged": random.randint(100, 300),
-                "total_volume": random.randint(5000000000, 8000000000)
+            # Approximate market breadth based on our limited data
+            # In a production system, you'd use specific market breadth APIs
+            result = {
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "indices": indices_data,
+                "advances": int(1000 * (positive_indices / len(indices_data))) if indices_data else 0,
+                "declines": int(1000 * (negative_indices / len(indices_data))) if indices_data else 0,
+                "unchanged": int(1000 * ((len(indices_data) - positive_indices - negative_indices) / len(indices_data))) if indices_data else 0,
+                "total_volume": total_volume
             }
+            
+            # Cache the results for one hour
+            self.cache.set(cache_key, result, ttl=3600)
+            
+            return result
             
         except Exception as e:
             logger.error(f"Error getting market overview: {str(e)}")

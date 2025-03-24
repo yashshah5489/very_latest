@@ -25,9 +25,12 @@ CACHE_DIR.mkdir(exist_ok=True)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY")
 
-# MongoDB settings
+# Database settings
 MONGODB_URI = os.environ.get("MONGODB_URI", "mongodb://localhost:27017")
 MONGODB_DB_NAME = os.environ.get("MONGODB_DB_NAME", "indian_financial_analyzer")
+
+# PostgreSQL settings
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 # LLM settings
 LLM_MODEL = os.environ.get("LLM_MODEL", "llama3-70b-8192")
