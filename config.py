@@ -38,6 +38,13 @@ LLM_MAX_TOKENS = int(os.environ.get("LLM_MAX_TOKENS", "4096"))
 EMBEDDING_CHUNK_SIZE = int(os.environ.get("EMBEDDING_CHUNK_SIZE", "1024"))
 EMBEDDING_CHUNK_OVERLAP = int(os.environ.get("EMBEDDING_CHUNK_OVERLAP", "128"))
 
+# API resource management
+# Rate limiting settings for API calls to avoid exceeding free tier limits
+TAVILY_RATE_LIMIT_PER_DAY = int(os.environ.get("TAVILY_RATE_LIMIT_PER_DAY", "50"))  # Conservative daily limit for Tavily API
+GROQ_RATE_LIMIT_PER_DAY = int(os.environ.get("GROQ_RATE_LIMIT_PER_DAY", "100"))  # Conservative daily limit for Groq API
+ENABLE_RESPONSE_CACHING = os.environ.get("ENABLE_RESPONSE_CACHING", "True").lower() == "true"
+CACHE_EXPIRY_SECONDS = int(os.environ.get("CACHE_EXPIRY_SECONDS", "3600"))  # Default 1 hour cache for API responses
+
 # Financial book settings
 FINANCIAL_BOOKS = [
     {"id": "rich_dad_poor_dad", "title": "Rich Dad Poor Dad", "author": "Robert Kiyosaki"},

@@ -1,16 +1,20 @@
 """
-Groq LLM Client for Indian Financial Analyzer
+Groq LLM Client for Indian Financial Analyzer using LangChain
 """
 import os
 import json
 import logging
-import requests
 from typing import Dict, Any, List, Optional, Union
+
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
+from langchain_groq import ChatGroq
+from langchain.schema.output_parser import StrOutputParser
 
 logger = logging.getLogger(__name__)
 
 class GroqClient:
-    """Client for Groq LLM API"""
+    """Client for Groq LLM API using LangChain"""
     
     def __init__(self, api_key=None):
         """Initialize Groq client with API key."""
@@ -18,8 +22,18 @@ class GroqClient:
         if not self.api_key:
             logger.warning("No Groq API key provided. Set the GROQ_API_KEY environment variable.")
         
-        self.api_base = "https://api.groq.com/openai/v1"
         self.default_model = "llama3-70b-8192"  # Using LLaMA 3 70B model
+        
+        # Initialize the LangChain LLM
+        try:
+            self.llm = ChatGroq(
+                groq_api_key=self.api_key,
+                model_name=self.default_model
+            )
+            logger.info(f"Initialized Groq LLM with model: {self.default_model}")
+        except Exception as e:
+            logger.error(f"Error initializing Groq LLM: {str(e)}")
+            self.llm = None
     
     def chat_completion(self, 
                         messages: List[Dict[str, str]], 
@@ -28,7 +42,7 @@ class GroqClient:
                         max_tokens: int = 1024,
                         stream: bool = False) -> Dict[str, Any]:
         """
-        Get a chat completion from Groq API.
+        Get a chat completion from Groq API using LangChain.
         
         Args:
             messages: List of message dictionaries with 'role' and 'content' keys
@@ -38,36 +52,50 @@ class GroqClient:
             stream: Whether to stream the response
             
         Returns:
-            Response from Groq API
+            Response formatted like the OpenAI API response
         """
         if not self.api_key:
             return {"error": "API key not configured. Please set GROQ_API_KEY environment variable."}
         
-        model = model or self.default_model
-        
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        data = {
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "stream": stream
-        }
+        if not self.llm:
+            return {"error": "LLM not initialized properly. Check logs for details."}
         
         try:
-            response = requests.post(
-                f"{self.api_base}/chat/completions",
-                headers=headers,
-                json=data
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error calling Groq API: {str(e)}")
+            # If a different model is specified, create a new LLM instance
+            llm = self.llm
+            if model and model != self.default_model:
+                llm = ChatGroq(
+                    groq_api_key=self.api_key,
+                    model_name=model,
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+            else:
+                # Update parameters
+                llm.temperature = temperature
+                llm.max_tokens = max_tokens
+            
+            # Convert OpenAI-style messages to LangChain format
+            response_text = llm.invoke(messages)
+            
+            # Format the response like OpenAI's API for backward compatibility
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": response_text.content
+                        },
+                        "index": 0,
+                        "finish_reason": "stop"
+                    }
+                ],
+                "model": model or self.default_model,
+                "object": "chat.completion"
+            }
+            
+        except Exception as e:
+            logger.error(f"Error calling Groq API via LangChain: {str(e)}")
             return {"error": str(e)}
     
     def generate_text(self, prompt: str, **kwargs) -> str:
