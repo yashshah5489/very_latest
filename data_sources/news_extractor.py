@@ -153,7 +153,10 @@ class NewsExtractor:
         params = {
             "query": query,
             "search_depth": "advanced",
+            "topic": "finance",
             "include_answer": False,
+            "chunks_per_source": 3,
+            "max_results": max_results,
             "include_domains": [
                 "moneycontrol.com", "economictimes.indiatimes.com", 
                 "livemint.com", "thehindubusinessline.com", 
@@ -161,7 +164,8 @@ class NewsExtractor:
                 "investing.com", "cnbctv18.com", "ndtv.com/business",
                 "bloomberg.com", "reuters.com", "ft.com"
             ],
-            "max_results": max_results
+            "include_raw_content": False,
+            "include_images": False
         }
         
         results = self._make_request("search", params)
@@ -252,7 +256,9 @@ class NewsExtractor:
         params = {
             "query": query,
             "search_depth": "advanced",
+            "topic": "finance",
             "include_answer": True,  # Include Tavily's generated answer for insights
+            "chunks_per_source": 3,
             "include_domains": [
                 "moneycontrol.com", "economictimes.indiatimes.com", 
                 "livemint.com", "thehindubusinessline.com", 
@@ -260,7 +266,9 @@ class NewsExtractor:
                 "investing.com", "cnbctv18.com", "ndtv.com/business",
                 "bloomberg.com", "reuters.com", "ft.com"
             ],
-            "max_results": limit
+            "max_results": limit,
+            "include_raw_content": False,
+            "include_images": False
         }
         
         results = self._make_request("search", params)
