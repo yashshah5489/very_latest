@@ -76,7 +76,12 @@ class NewsExtractor:
         }
         
         try:
-            url = self.search_endpoint if endpoint == "search" else f"{self.api_base}/{endpoint}"
+            # New updated endpoints per Tavily API docs
+            if endpoint == "search":
+                url = "https://api.tavily.com/search"
+            else:
+                url = f"{self.api_base}/{endpoint}"
+                
             logger.info(f"Making Tavily API request to {url}")
             
             response = requests.post(

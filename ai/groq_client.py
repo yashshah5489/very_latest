@@ -53,7 +53,7 @@ class GroqClient:
                         max_tokens: int = 1024,
                         stream: bool = False) -> Dict[str, Any]:
         """
-        Get a chat completion from Groq API using LangChain.
+        Get a chat completion from Groq API using LangChain with caching to minimize API usage.
         
         Args:
             messages: List of message dictionaries with 'role' and 'content' keys
@@ -71,6 +71,29 @@ class GroqClient:
         if not self.llm:
             return {"error": "LLM not initialized properly. Check logs for details."}
         
+        # Check if caching is available and enabled
+        caching_enabled = cache_manager is not None
+        
+        # Create a cache key from the request parameters
+        # We don't include stream in the cache key as it only affects delivery, not content
+        cache_key = None
+        if caching_enabled and not stream:
+            # Convert messages to a stable string representation for caching
+            messages_str = json.dumps(messages, sort_keys=True)
+            model_name = model or self.default_model
+            cache_key = f"groq_{model_name}_{temperature}_{max_tokens}_{hashlib.md5(messages_str.encode()).hexdigest()}"
+            
+            # Check if we have a cached response
+            cached_response = cache_manager.get(cache_key)
+            if cached_response:
+                logger.info(f"Using cached response for Groq LLM request")
+                return cached_response
+            
+            # Check if we have exceeded the rate limit
+            if not cache_manager.track_api_call("groq"):
+                logger.warning("Groq API daily rate limit exceeded")
+                return {"error": "Daily rate limit for Groq API exceeded. Try again tomorrow."}
+            
         try:
             # If a different model is specified, create a new LLM instance
             llm = self.llm
@@ -86,11 +109,13 @@ class GroqClient:
                 llm.temperature = temperature
                 llm.max_tokens = max_tokens
             
+            logger.info(f"Making Groq LLM request with model: {model or self.default_model}")
+            
             # Convert OpenAI-style messages to LangChain format
             response_text = llm.invoke(messages)
             
             # Format the response like OpenAI's API for backward compatibility
-            return {
+            response = {
                 "choices": [
                     {
                         "message": {
@@ -104,6 +129,12 @@ class GroqClient:
                 "model": model or self.default_model,
                 "object": "chat.completion"
             }
+            
+            # Cache the successful response if caching is enabled and not streaming
+            if caching_enabled and cache_key and not stream:
+                cache_manager.set(cache_key, response)
+                
+            return response
             
         except Exception as e:
             logger.error(f"Error calling Groq API via LangChain: {str(e)}")
