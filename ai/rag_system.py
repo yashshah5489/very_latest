@@ -6,12 +6,13 @@ import json
 import logging
 import re
 import pickle
-import numpy as np
+import time
 from typing import Dict, List, Any, Optional, Tuple, Union
 from pathlib import Path
 import markdown
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+import chromadb
+from chromadb.config import Settings
+from chromadb.utils import embedding_functions
 
 from ai.groq_client import GroqClient
 
@@ -40,12 +41,14 @@ class RAGSystem:
         self.embeddings_dir = Path(self.cache_dir) / "embeddings"
         os.makedirs(self.embeddings_dir, exist_ok=True)
         
-        # TF-IDF vectorizer for embedding generation
-        self.vectorizer = TfidfVectorizer(
-            stop_words='english',
-            max_features=5000,
-            ngram_range=(1, 2)
-        )
+        # Initialize the ChromaDB client
+        self.chroma_client = chromadb.Client(Settings(
+            chroma_db_impl="duckdb+parquet",
+            persist_directory=str(self.embeddings_dir / "chroma_db")
+        ))
+        
+        # Use a default embedding function that's lightweight but effective
+        self.embedding_function = embedding_functions.DefaultEmbeddingFunction()
         
         # Load book metadata
         self.books = self._load_books()
@@ -204,20 +207,22 @@ class RAGSystem:
         
     def _process_books(self):
         """
-        Process all books to create chunk embeddings if they don't exist.
+        Process all books to create chunk embeddings using ChromaDB.
         These embeddings will be used for faster retrieval later.
         """
         for book in self.books:
             book_id = book["id"]
-            embeddings_file = self.embeddings_dir / f"{book_id}_embeddings.pkl"
-            chunks_file = self.embeddings_dir / f"{book_id}_chunks.pkl"
+            collection_name = f"book_{book_id}"
             
-            # Skip if embeddings already exist
-            if embeddings_file.exists() and chunks_file.exists():
-                logger.info(f"Embeddings for {book_id} already exist, skipping processing")
+            # Check if this collection already exists in ChromaDB
+            existing_collections = self.chroma_client.list_collections()
+            collection_exists = any(collection.name == collection_name for collection in existing_collections)
+            
+            if collection_exists:
+                logger.info(f"Collection for {book_id} already exists in ChromaDB, skipping processing")
                 continue
                 
-            logger.info(f"Processing book {book_id} to create embeddings")
+            logger.info(f"Processing book {book_id} to create embeddings in ChromaDB")
             
             try:
                 # Read the book content
@@ -229,8 +234,11 @@ class RAGSystem:
                 
                 # Combine short paragraphs to make reasonable-sized chunks
                 chunks = []
+                chunk_ids = []
+                chunk_metadatas = []
                 current_chunk = ""
-                max_chunk_length = 500  # characters
+                max_chunk_length = 1000  # characters (ChromaDB can handle larger chunks)
+                chunk_index = 0
                 
                 for p in paragraphs:
                     if len(current_chunk) + len(p) <= max_chunk_length:
@@ -238,61 +246,100 @@ class RAGSystem:
                     else:
                         if current_chunk:
                             chunks.append(current_chunk)
+                            chunk_ids.append(f"{book_id}_{chunk_index}")
+                            chunk_metadatas.append({
+                                "book_id": book_id,
+                                "book_title": book["title"],
+                                "book_author": book["author"],
+                                "chunk_index": chunk_index,
+                                "source": "book"
+                            })
+                            chunk_index += 1
                         current_chunk = p
                         
                 if current_chunk:
                     chunks.append(current_chunk)
+                    chunk_ids.append(f"{book_id}_{chunk_index}")
+                    chunk_metadatas.append({
+                        "book_id": book_id,
+                        "book_title": book["title"],
+                        "book_author": book["author"],
+                        "chunk_index": chunk_index,
+                        "source": "book"
+                    })
                 
-                # Create embeddings using the TF-IDF vectorizer
+                # Create a new collection in ChromaDB for this book
                 if chunks:  # Only proceed if we have chunks
-                    tfidf_matrix = self.vectorizer.fit_transform(chunks)
+                    # Get or create collection
+                    collection = self.chroma_client.create_collection(
+                        name=collection_name,
+                        embedding_function=self.embedding_function,
+                        metadata={"book_id": book_id, "title": book["title"], "author": book["author"]}
+                    )
                     
-                    # Save embeddings and chunks
-                    with open(embeddings_file, 'wb') as f:
-                        pickle.dump(tfidf_matrix, f)
+                    # Add documents in batches to avoid memory issues
+                    batch_size = 100
+                    for i in range(0, len(chunks), batch_size):
+                        batch_end = min(i + batch_size, len(chunks))
+                        collection.add(
+                            documents=chunks[i:batch_end],
+                            ids=chunk_ids[i:batch_end],
+                            metadatas=chunk_metadatas[i:batch_end]
+                        )
                         
-                    with open(chunks_file, 'wb') as f:
-                        pickle.dump(chunks, f)
-                        
-                    logger.info(f"Created {len(chunks)} chunk embeddings for {book_id}")
+                    # Persist the changes
+                    self.chroma_client.persist()
+                    
+                    logger.info(f"Created ChromaDB collection with {len(chunks)} chunks for {book_id}")
                 else:
                     logger.warning(f"No chunks found for {book_id}")
                     
             except Exception as e:
                 logger.error(f"Error processing embeddings for {book_id}: {e}")
     
-    def _get_book_embeddings(self, book_id: str) -> Tuple[List[str], Any]:
+    def _get_book_collection(self, book_id: str):
         """
-        Get the chunk embeddings for a specific book.
+        Get the ChromaDB collection for a specific book.
         
         Args:
             book_id: The book ID
             
         Returns:
-            Tuple of (chunks, embeddings)
+            ChromaDB collection or None if not found
         """
-        embeddings_file = self.embeddings_dir / f"{book_id}_embeddings.pkl"
-        chunks_file = self.embeddings_dir / f"{book_id}_chunks.pkl"
+        collection_name = f"book_{book_id}"
         
-        if not embeddings_file.exists() or not chunks_file.exists():
-            logger.warning(f"Embeddings for {book_id} not found, processing book")
-            self._process_books()
-            
         try:
-            with open(embeddings_file, 'rb') as f:
-                embeddings = pickle.load(f)
+            # Check if this collection exists in ChromaDB
+            existing_collections = self.chroma_client.list_collections()
+            collection_exists = any(collection.name == collection_name for collection in existing_collections)
+            
+            if not collection_exists:
+                logger.warning(f"Collection for {book_id} not found in ChromaDB, processing book")
+                self._process_books()
                 
-            with open(chunks_file, 'rb') as f:
-                chunks = pickle.load(f)
+                # Check again after processing
+                existing_collections = self.chroma_client.list_collections()
+                collection_exists = any(collection.name == collection_name for collection in existing_collections)
                 
-            return chunks, embeddings
+                if not collection_exists:
+                    logger.error(f"Failed to create collection for {book_id}")
+                    return None
+            
+            # Get the collection
+            collection = self.chroma_client.get_collection(
+                name=collection_name,
+                embedding_function=self.embedding_function
+            )
+            
+            return collection
         except Exception as e:
-            logger.error(f"Error loading embeddings for {book_id}: {e}")
-            return [], None
+            logger.error(f"Error getting ChromaDB collection for {book_id}: {e}")
+            return None
     
     def _extract_relevant_passages(self, book_id: str, query: str, max_passages: int = 3) -> List[Dict[str, Any]]:
         """
-        Extract passages from a book that are relevant to a query.
+        Extract passages from a book that are relevant to a query using ChromaDB.
         
         Args:
             book_id: ID of the book to search
@@ -319,43 +366,52 @@ class RAGSystem:
             except (json.JSONDecodeError, IOError) as e:
                 logger.warning(f"Error loading cached passages for {cache_key}: {e}")
         
-        # First try using our embedding-based approach
+        # Try using ChromaDB approach
         try:
-            chunks, chunk_embeddings = self._get_book_embeddings(book_id)
+            # Get the collection for this book
+            collection = self._get_book_collection(book_id)
             
-            if chunks and chunk_embeddings is not None:
-                # Get query embedding
-                query_embedding = self.vectorizer.transform([query])
+            if collection:
+                # Query the collection for similar passages
+                results = collection.query(
+                    query_texts=[query],
+                    n_results=max_passages,
+                    include=["documents", "metadatas", "distances"]
+                )
                 
-                # Calculate cosine similarity between query and all chunks
-                similarities = cosine_similarity(query_embedding, chunk_embeddings).flatten()
+                if results and len(results["documents"]) > 0 and len(results["documents"][0]) > 0:
+                    # Prepare the passages with the book metadata
+                    passages = []
+                    for i, (text, metadata, distance) in enumerate(zip(
+                        results["documents"][0], 
+                        results["metadatas"][0], 
+                        results["distances"][0]
+                    )):
+                        # Convert distance to similarity score (ChromaDB returns distance, lower is better)
+                        # Simple conversion: similarity = 1 - normalized_distance
+                        similarity = 1.0 - min(distance, 1.0)
+                        
+                        passage = {
+                            "book_id": book_id,
+                            "book_title": book["title"],
+                            "book_author": book["author"],
+                            "text": text,
+                            "relevance": f"Semantic similarity: {similarity:.4f}",
+                            "similarity_score": float(similarity)
+                        }
+                        passages.append(passage)
+                    
+                    # Cache the results
+                    with open(cache_file, 'w', encoding='utf-8') as f:
+                        json.dump(passages, f, indent=2)
+                    
+                    return passages
                 
-                # Get the indices of the top K most similar chunks
-                top_indices = similarities.argsort()[-max_passages*2:][::-1]
-                
-                # Get the top chunks and their similarity scores
-                top_chunks = [(chunks[i], similarities[i]) for i in top_indices]
-                
-                # Prepare the passages with the book metadata
-                passages = []
-                for chunk, similarity in top_chunks[:max_passages]:
-                    passage = {
-                        "book_id": book_id,
-                        "book_title": book["title"],
-                        "book_author": book["author"],
-                        "text": chunk,
-                        "relevance": f"Semantic similarity: {similarity:.4f}",
-                        "similarity_score": float(similarity)
-                    }
-                    passages.append(passage)
-                
-                # Cache the results
-                with open(cache_file, 'w', encoding='utf-8') as f:
-                    json.dump(passages, f, indent=2)
-                
-                return passages
+            # If collection is empty or doesn't exist, fall back to the original approach
+            logger.warning(f"ChromaDB collection for {book_id} returned no results, falling back to LLM approach")
+            
         except Exception as e:
-            logger.error(f"Error in embedding-based retrieval for {book_id}: {e}")
+            logger.error(f"Error in ChromaDB retrieval for {book_id}: {e}")
             # Fall back to the original approach
         
         # Fall back to the original approach if embeddings don't work
