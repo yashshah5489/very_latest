@@ -5,9 +5,13 @@ import os
 import json
 import logging
 import re
+import pickle
+import numpy as np
 from typing import Dict, List, Any, Optional, Tuple, Union
 from pathlib import Path
 import markdown
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 from ai.groq_client import GroqClient
 
@@ -32,8 +36,22 @@ class RAGSystem:
         # Make sure cache directory exists
         os.makedirs(self.cache_dir, exist_ok=True)
         
+        # Directory for storing embeddings
+        self.embeddings_dir = Path(self.cache_dir) / "embeddings"
+        os.makedirs(self.embeddings_dir, exist_ok=True)
+        
+        # TF-IDF vectorizer for embedding generation
+        self.vectorizer = TfidfVectorizer(
+            stop_words='english',
+            max_features=5000,
+            ngram_range=(1, 2)
+        )
+        
         # Load book metadata
         self.books = self._load_books()
+        
+        # Process books and create embeddings if they don't exist
+        self.process_books()
         
     def _load_books(self) -> List[Dict[str, Any]]:
         """
@@ -178,6 +196,100 @@ class RAGSystem:
                 "error": f"Failed to generate summary: {str(e)}"
             }
 
+    def process_books(self):
+        """
+        Public method to process all books and create embeddings.
+        """
+        self._process_books()
+        
+    def _process_books(self):
+        """
+        Process all books to create chunk embeddings if they don't exist.
+        These embeddings will be used for faster retrieval later.
+        """
+        for book in self.books:
+            book_id = book["id"]
+            embeddings_file = self.embeddings_dir / f"{book_id}_embeddings.pkl"
+            chunks_file = self.embeddings_dir / f"{book_id}_chunks.pkl"
+            
+            # Skip if embeddings already exist
+            if embeddings_file.exists() and chunks_file.exists():
+                logger.info(f"Embeddings for {book_id} already exist, skipping processing")
+                continue
+                
+            logger.info(f"Processing book {book_id} to create embeddings")
+            
+            try:
+                # Read the book content
+                with open(book["file_path"], 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Split into chunks (paragraphs)
+                paragraphs = [p.strip() for p in re.split(r'\n\s*\n', content) if p.strip()]
+                
+                # Combine short paragraphs to make reasonable-sized chunks
+                chunks = []
+                current_chunk = ""
+                max_chunk_length = 500  # characters
+                
+                for p in paragraphs:
+                    if len(current_chunk) + len(p) <= max_chunk_length:
+                        current_chunk += "\n\n" + p if current_chunk else p
+                    else:
+                        if current_chunk:
+                            chunks.append(current_chunk)
+                        current_chunk = p
+                        
+                if current_chunk:
+                    chunks.append(current_chunk)
+                
+                # Create embeddings using the TF-IDF vectorizer
+                if chunks:  # Only proceed if we have chunks
+                    tfidf_matrix = self.vectorizer.fit_transform(chunks)
+                    
+                    # Save embeddings and chunks
+                    with open(embeddings_file, 'wb') as f:
+                        pickle.dump(tfidf_matrix, f)
+                        
+                    with open(chunks_file, 'wb') as f:
+                        pickle.dump(chunks, f)
+                        
+                    logger.info(f"Created {len(chunks)} chunk embeddings for {book_id}")
+                else:
+                    logger.warning(f"No chunks found for {book_id}")
+                    
+            except Exception as e:
+                logger.error(f"Error processing embeddings for {book_id}: {e}")
+    
+    def _get_book_embeddings(self, book_id: str) -> Tuple[List[str], Any]:
+        """
+        Get the chunk embeddings for a specific book.
+        
+        Args:
+            book_id: The book ID
+            
+        Returns:
+            Tuple of (chunks, embeddings)
+        """
+        embeddings_file = self.embeddings_dir / f"{book_id}_embeddings.pkl"
+        chunks_file = self.embeddings_dir / f"{book_id}_chunks.pkl"
+        
+        if not embeddings_file.exists() or not chunks_file.exists():
+            logger.warning(f"Embeddings for {book_id} not found, processing book")
+            self._process_books()
+            
+        try:
+            with open(embeddings_file, 'rb') as f:
+                embeddings = pickle.load(f)
+                
+            with open(chunks_file, 'rb') as f:
+                chunks = pickle.load(f)
+                
+            return chunks, embeddings
+        except Exception as e:
+            logger.error(f"Error loading embeddings for {book_id}: {e}")
+            return [], None
+    
     def _extract_relevant_passages(self, book_id: str, query: str, max_passages: int = 3) -> List[Dict[str, Any]]:
         """
         Extract passages from a book that are relevant to a query.
@@ -196,9 +308,58 @@ class RAGSystem:
             logger.error(f"Book with ID '{book_id}' not found or has no file path")
             return []
         
-        # For a real implementation, this would use embeddings and vector search.
-        # For simplicity in this implementation, we'll use a keyword-based approach
-        # with the Groq LLM to determine relevance.
+        # Check if we have a cached result for this query and book
+        cache_key = f"{book_id}_{hash(query)}"
+        cache_file = self.cache_dir / f"{cache_key}_passages.json"
+        
+        if cache_file.exists():
+            try:
+                with open(cache_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError) as e:
+                logger.warning(f"Error loading cached passages for {cache_key}: {e}")
+        
+        # First try using our embedding-based approach
+        try:
+            chunks, chunk_embeddings = self._get_book_embeddings(book_id)
+            
+            if chunks and chunk_embeddings is not None:
+                # Get query embedding
+                query_embedding = self.vectorizer.transform([query])
+                
+                # Calculate cosine similarity between query and all chunks
+                similarities = cosine_similarity(query_embedding, chunk_embeddings).flatten()
+                
+                # Get the indices of the top K most similar chunks
+                top_indices = similarities.argsort()[-max_passages*2:][::-1]
+                
+                # Get the top chunks and their similarity scores
+                top_chunks = [(chunks[i], similarities[i]) for i in top_indices]
+                
+                # Prepare the passages with the book metadata
+                passages = []
+                for chunk, similarity in top_chunks[:max_passages]:
+                    passage = {
+                        "book_id": book_id,
+                        "book_title": book["title"],
+                        "book_author": book["author"],
+                        "text": chunk,
+                        "relevance": f"Semantic similarity: {similarity:.4f}",
+                        "similarity_score": float(similarity)
+                    }
+                    passages.append(passage)
+                
+                # Cache the results
+                with open(cache_file, 'w', encoding='utf-8') as f:
+                    json.dump(passages, f, indent=2)
+                
+                return passages
+        except Exception as e:
+            logger.error(f"Error in embedding-based retrieval for {book_id}: {e}")
+            # Fall back to the original approach
+        
+        # Fall back to the original approach if embeddings don't work
+        # This is our backup approach using keyword matching and LLM
         
         try:
             # Read the book content
@@ -501,4 +662,11 @@ class RAGSystem:
 
 
 # Initialize global instance
-rag_system = RAGSystem()
+rag_system = None
+
+# We'll initialize this properly in app.py or when imported
+def initialize_rag_system():
+    global rag_system
+    if rag_system is None:
+        rag_system = RAGSystem()
+    return rag_system
